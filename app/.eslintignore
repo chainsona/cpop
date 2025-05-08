@@ -1,0 +1,17 @@
+# Ignore build output
+.next/
+.next
+
+# Ignore generated files
+src/generated/
+**/generated/**
+
+# Dependencies
+node_modules/
+
+# Misc
+.DS_Store
+.env*.local
+out/
+dist/
+build/ 
