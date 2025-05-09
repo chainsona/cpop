@@ -56,4 +56,4 @@ export function POAPImage({ id, imageUrl, title, statusDisplay }: POAPImageProps
       )}
     </div>
   );
-} 
+}

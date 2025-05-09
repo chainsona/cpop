@@ -8,8 +8,43 @@ import { EmptyState } from '@/components/poap/empty-state';
 import { PoapItem } from '@/types/poap';
 
 export default async function POAPListPage() {
+  // Fetch POAPs with their distribution methods
   const poaps = (await prisma.poap.findMany({
     orderBy: { createdAt: 'desc' },
+    include: {
+      distributionMethods: {
+        where: {
+          // Only include non-deleted methods
+          deleted: false,
+        },
+        select: {
+          id: true,
+          type: true,
+          disabled: true,
+          deleted: true,
+          // Include relationship data for different method types
+          claimLinks: {
+            select: {
+              id: true,
+              claimed: true,
+            },
+          },
+          secretWord: {
+            select: {
+              claimCount: true,
+              maxClaims: true,
+            },
+          },
+          locationBased: {
+            select: {
+              claimCount: true,
+              maxClaims: true,
+              city: true,
+            },
+          },
+        },
+      },
+    },
   })) as PoapItem[];
 
   // Count how many base64 images are present

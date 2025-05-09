@@ -20,4 +20,4 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY="your-supabase-anon-key"
 4. Set up a PostgreSQL database and update the `DATABASE_URL` with your connection string
 5. Run `pnpm prisma migrate dev` to create the database tables
 
-The `.env` file should be placed in the root directory of your project. 
+The `.env` file should be placed in the root directory of your project.

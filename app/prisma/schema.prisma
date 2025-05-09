@@ -22,14 +22,161 @@ model Poap {
   website     String?
   startDate   DateTime
   endDate     DateTime
-  supply      Int?
+  attendees   Int?
   status      PoapStatus @default(Draft)
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
+
+  // Relations to the configuration entities
+  attributes       Attributes?
+  settings         Settings?
+  distributionMethods DistributionMethod[]
 }
 
 enum PoapStatus {
   Draft
   Published
   Distributed
+  Unclaimable
+}
+
+// Distribution related models
+model DistributionMethod {
+  id        String   @id @default(cuid())
+  poapId    String
+  type      DistributionType
+  disabled  Boolean  @default(false)
+  deleted   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  poap             Poap      @relation(fields: [poapId], references: [id], onDelete: Cascade)
+  claimLinks       ClaimLink[]
+  secretWord       SecretWord?
+  locationBased    LocationBased?
+}
+
+enum DistributionType {
+  ClaimLinks
+  SecretWord
+  LocationBased
+}
+
+model ClaimLink {
+  id                String   @id @default(cuid())
+  distributionMethodId String
+  token             String   @unique
+  claimed           Boolean  @default(false)
+  claimedAt         DateTime?
+  expiresAt         DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Relations
+  distributionMethod DistributionMethod @relation(fields: [distributionMethodId], references: [id], onDelete: Cascade)
+}
+
+model SecretWord {
+  id                 String   @id @default(cuid())
+  distributionMethodId String  @unique
+  word               String
+  maxClaims          Int?
+  claimCount         Int      @default(0)
+  startDate          DateTime?
+  endDate            DateTime?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  // Relations
+  distributionMethod DistributionMethod @relation(fields: [distributionMethodId], references: [id], onDelete: Cascade)
+}
+
+model LocationBased {
+  id                 String   @id @default(cuid())
+  distributionMethodId String  @unique
+  city               String
+  country            String?
+  latitude           Float?
+  longitude          Float?
+  radius             Int      @default(500) // In meters
+  maxClaims          Int?
+  claimCount         Int      @default(0)
+  startDate          DateTime?
+  endDate            DateTime?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  // Relations
+  distributionMethod DistributionMethod @relation(fields: [distributionMethodId], references: [id], onDelete: Cascade)
+}
+
+// Attributes related models
+model Attributes {
+  id           String @id @default(cuid())
+  poapId       String @unique
+  eventType    EventType @default(Physical)
+  platform     String?
+  platformUrl  String?
+  city         String?
+  country      String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  poap        Poap     @relation(fields: [poapId], references: [id], onDelete: Cascade)
+  artists     Artist[]
+  organization Organization?
+}
+
+enum EventType {
+  Physical
+  Online
+}
+
+model Artist {
+  id           String @id @default(cuid())
+  attributesId String
+  name         String
+  url          String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  attributes   Attributes @relation(fields: [attributesId], references: [id], onDelete: Cascade)
+}
+
+model Organization {
+  id           String @id @default(cuid())
+  attributesId String @unique
+  name         String
+  url          String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  attributes   Attributes @relation(fields: [attributesId], references: [id], onDelete: Cascade)
+}
+
+// Settings related model
+model Settings {
+  id                String   @id @default(cuid())
+  poapId            String   @unique
+  defaultStartDate  DateTime?
+  defaultEndDate    DateTime?
+  includeTime       Boolean  @default(false)
+  visibility        Visibility @default(Public)
+  allowSearch       Boolean  @default(true)
+  notifyOnClaim     Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Relations
+  poap             Poap      @relation(fields: [poapId], references: [id], onDelete: Cascade)
+}
+
+enum Visibility {
+  Public
+  Unlisted
+  Private
 }

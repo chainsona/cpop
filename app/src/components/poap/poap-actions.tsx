@@ -37,4 +37,4 @@ export function POAPActions({ id, title, website }: POAPActionsProps) {
       </div>
     </div>
   );
-} 
+}

@@ -1,8 +1,8 @@
-"use client";
+'use client';
 
-import { useState } from "react";
-import { Trash2 } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useState } from 'react';
+import { Trash2 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -13,22 +13,22 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
-import { Button } from "@/components/ui/button";
+} from '@/components/ui/alert-dialog';
+import { Button } from '@/components/ui/button';
 
 interface DeletePOAPButtonProps {
   poapId: string;
-  variant?: "outline" | "destructive" | "ghost";
-  size?: "default" | "sm" | "lg" | "icon";
+  variant?: 'outline' | 'destructive' | 'ghost';
+  size?: 'default' | 'sm' | 'lg' | 'icon';
   className?: string;
   onSuccess?: () => void;
 }
 
 export function DeletePOAPButton({
   poapId,
-  variant = "outline",
-  size = "sm",
-  className = "",
+  variant = 'outline',
+  size = 'sm',
+  className = '',
   onSuccess,
 }: DeletePOAPButtonProps) {
   const router = useRouter();
@@ -42,12 +42,12 @@ export function DeletePOAPButton({
 
     try {
       const response = await fetch(`/api/poaps/${poapId}`, {
-        method: "DELETE",
+        method: 'DELETE',
       });
 
       if (!response.ok) {
         const data = await response.json();
-        throw new Error(data.error || "Failed to delete POAP");
+        throw new Error(data.error || 'Failed to delete POAP');
       }
 
       // Close the dialog
@@ -61,7 +61,7 @@ export function DeletePOAPButton({
       // Refresh the page/data
       router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "An error occurred");
+      setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
       setIsDeleting(false);
     }
@@ -74,9 +74,7 @@ export function DeletePOAPButton({
           variant={variant}
           size={size}
           className={`${className} ${
-            variant === "destructive"
-              ? ""
-              : "text-red-600 hover:text-red-700 hover:bg-red-50"
+            variant === 'destructive' ? '' : 'text-red-600 hover:text-red-700 hover:bg-red-50'
           }`}
         >
           <Trash2 className="h-4 w-4 mr-1" />
@@ -85,17 +83,10 @@ export function DeletePOAPButton({
       </AlertDialogTrigger>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>
-            Are you sure you want to delete this POAP?
-          </AlertDialogTitle>
+          <AlertDialogTitle>Are you sure you want to delete this POAP?</AlertDialogTitle>
           <AlertDialogDescription>
-            This action cannot be undone. The POAP will be permanently deleted
-            from the database.
-            {error && (
-              <div className="mt-2 text-red-600 text-sm font-medium">
-                Error: {error}
-              </div>
-            )}
+            This action cannot be undone. The POAP will be permanently deleted from the database.
+            {error && <div className="mt-2 text-red-600 text-sm font-medium">Error: {error}</div>}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
@@ -108,7 +99,7 @@ export function DeletePOAPButton({
             disabled={isDeleting}
             className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
           >
-            {isDeleting ? "Deleting..." : "Delete"}
+            {isDeleting ? 'Deleting...' : 'Delete'}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

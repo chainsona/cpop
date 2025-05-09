@@ -1,4 +1,5 @@
 import type { StatusDisplay, ColorPalette } from '@/types/poap';
+import { prisma } from '@/lib/db';
 
 // Determine image type (external URL or base64)
 export function isBase64Image(url: string): boolean {
@@ -37,16 +38,68 @@ export const COLOR_PALETTES: ColorPalette[] = [
   },
 ];
 
-// Get a color palette based on the ID to ensure consistency
+// Get color palette for a POAP based on its ID
 export function getColorPaletteForId(id: string): ColorPalette {
-  // Use the last character of the ID as a simple hash
-  const lastChar = id.slice(-1);
-  const index = parseInt(lastChar, 16) % COLOR_PALETTES.length;
-  return COLOR_PALETTES[index >= 0 ? index : 0];
+  // Use the last 6 characters of the ID as the basis for our color
+  const seed = id.slice(-6);
+  
+  // Simple hash function to generate a number from the seed
+  const hashNumber = seed.split('').reduce((a, b) => {
+    a = ((a << 5) - a) + b.charCodeAt(0);
+    return a & a;
+  }, 0);
+  
+  // Use the hash to pick from predefined color schemes
+  const colorSchemes = [
+    {
+      name: 'blue',
+      gradient: 'bg-gradient-to-br from-blue-50 to-indigo-100',
+      border: 'border-blue-200',
+      text: 'text-blue-700',
+      lightBg: 'bg-blue-50',
+      background: 'bg-blue-50',
+    },
+    {
+      name: 'purple',
+      gradient: 'bg-gradient-to-br from-purple-50 to-indigo-100',
+      border: 'border-purple-200',
+      text: 'text-purple-700',
+      lightBg: 'bg-purple-50',
+      background: 'bg-purple-50',
+    },
+    {
+      name: 'green',
+      gradient: 'bg-gradient-to-br from-green-50 to-emerald-100',
+      border: 'border-green-200',
+      text: 'text-green-700',
+      lightBg: 'bg-green-50',
+      background: 'bg-green-50',
+    },
+    {
+      name: 'amber',
+      gradient: 'bg-gradient-to-br from-amber-50 to-orange-100',
+      border: 'border-amber-200',
+      text: 'text-amber-700',
+      lightBg: 'bg-amber-50',
+      background: 'bg-amber-50',
+    },
+    {
+      name: 'rose',
+      gradient: 'bg-gradient-to-br from-rose-50 to-pink-100',
+      border: 'border-rose-200',
+      text: 'text-rose-700',
+      lightBg: 'bg-rose-50',
+      background: 'bg-rose-50',
+    },
+  ];
+  
+  return colorSchemes[Math.abs(hashNumber) % colorSchemes.length];
 }
 
 // Get status display information without JSX
-export function getStatusDisplay(status: 'Draft' | 'Published' | 'Distributed'): Omit<StatusDisplay, 'icon'> & { iconName: string } {
+export function getStatusDisplay(
+  status: 'Draft' | 'Published' | 'Distributed' | 'Unclaimable'
+): Omit<StatusDisplay, 'icon'> & { iconName: string } {
   switch (status) {
     case 'Draft':
       return {
@@ -72,5 +125,59 @@ export function getStatusDisplay(status: 'Draft' | 'Published' | 'Distributed'):
         borderColor: 'border-green-200',
         iconName: 'Award',
       };
+    case 'Unclaimable':
+      return {
+        label: 'Unclaimable',
+        color: 'text-amber-600',
+        bgColor: 'bg-amber-100',
+        borderColor: 'border-amber-200',
+        iconName: 'AlertTriangle',
+      };
   }
-} 
+}
+
+/**
+ * Updates the POAP status based on its distribution methods
+ * - If at least one distribution method is active (not disabled and not deleted), set status to "Published"
+ * - If there are distribution methods but all are disabled or deleted, set status to "Unclaimable"
+ * - Otherwise, keep the existing status
+ */
+export async function updatePoapStatusBasedOnDistributionMethods(poapId: string): Promise<void> {
+  try {
+    // Get all distribution methods for this POAP
+    const distributionMethods = await prisma.distributionMethod.findMany({
+      where: {
+        poapId: poapId,
+      },
+    });
+    
+    // No distribution methods, don't change the status
+    if (distributionMethods.length === 0) {
+      return;
+    }
+    
+    // Check if there are any active distribution methods
+    const activeDistributionMethods = distributionMethods.filter(
+      (method: { disabled: boolean; deleted: boolean }) => !method.disabled && !method.deleted
+    );
+    
+    // Determine the new status
+    if (activeDistributionMethods.length > 0) {
+      // At least one active distribution method - set to Published
+      await prisma.poap.update({
+        where: { id: poapId },
+        data: { status: 'Published' },
+      });
+    } else {
+      // There are distribution methods but none are active - now we can use 'Unclaimable'
+      await prisma.poap.update({
+        where: { id: poapId },
+        data: { status: 'Unclaimable' },
+      });
+    }
+  } catch (error) {
+    console.error('Error updating POAP status:', error);
+    // Let the caller handle the error
+    throw error;
+  }
+}

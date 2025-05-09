@@ -9,9 +9,43 @@ export interface PoapItem {
   website: string | null;
   startDate: Date;
   endDate: Date;
-  supply: number | null;
-  status: 'Draft' | 'Published' | 'Distributed';
+  attendees: number | null;
+  status: 'Draft' | 'Published' | 'Distributed' | 'Unclaimable';
+  distributionMethods?: DistributionMethod[];
 }
+
+// Distribution methods for badges
+export interface DistributionMethod {
+  id: string;
+  type: DistributionType;
+  disabled: boolean;
+  deleted: boolean;
+  // Include additional relationship data
+  claimLinks?: ClaimLink[];
+  secretWord?: SecretWord;
+  locationBased?: LocationBased;
+}
+
+// ClaimLink type
+export interface ClaimLink {
+  id: string;
+  claimed: boolean;
+}
+
+// SecretWord type
+export interface SecretWord {
+  claimCount: number;
+  maxClaims: number | null;
+}
+
+// LocationBased type
+export interface LocationBased {
+  claimCount: number;
+  maxClaims: number | null;
+  city: string;
+}
+
+export type DistributionType = 'ClaimLinks' | 'SecretWord' | 'LocationBased';
 
 // Status display information
 export interface StatusDisplay {
@@ -26,4 +60,4 @@ export interface StatusDisplay {
 export interface ColorPalette {
   background: string;
   gradient: string;
-} 
+}

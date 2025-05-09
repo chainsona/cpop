@@ -1,4 +1,4 @@
-import { CreatePOAP } from "@/components/CreatePOAP";
+import { CreatePOAP } from '@/components/CreatePOAP';
 
 export default function CreatePOAPPage() {
   return (
@@ -12,4 +12,3 @@ export default function CreatePOAPPage() {
     </div>
   );
 }
- 

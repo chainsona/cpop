@@ -4,10 +4,10 @@ import { formatDateRange } from '@/lib/date-utils';
 interface POAPMetadataProps {
   startDate: Date;
   endDate: Date;
-  supply: number | null;
+  attendees: number | null;
 }
 
-export function POAPMetadata({ startDate, endDate, supply }: POAPMetadataProps) {
+export function POAPMetadata({ startDate, endDate, attendees }: POAPMetadataProps) {
   return (
     <div className="flex flex-wrap gap-x-6 gap-y-3 text-sm text-neutral-600 mb-4">
       <span className="flex items-center gap-1.5">
@@ -15,12 +15,12 @@ export function POAPMetadata({ startDate, endDate, supply }: POAPMetadataProps) 
         <span>{formatDateRange(startDate, endDate)}</span>
       </span>
 
-      {supply && (
+      {attendees && (
         <span className="flex items-center gap-1.5">
           <Hash className="h-4 w-4 text-emerald-500" />
-          <span>Supply: {supply.toLocaleString()}</span>
+          <span>Attendees: {attendees.toLocaleString()}</span>
         </span>
       )}
     </div>
   );
-} 
+}

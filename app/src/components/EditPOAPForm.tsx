@@ -1,11 +1,11 @@
-"use client";
+'use client';
 
-import { useState, useEffect } from "react";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { poapFormSchema } from "@/lib/validations";
-import { AlertCircle, UploadCloud, Image as ImageIcon, X } from "lucide-react";
-import { DeletePOAPButton } from "./DeletePOAPButton";
+import { useState, useEffect } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { poapFormSchema } from '@/lib/validations';
+import { AlertCircle, UploadCloud, Image as ImageIcon, X } from 'lucide-react';
+import { DeletePOAPButton } from './DeletePOAPButton';
 
 import {
   Form,
@@ -14,12 +14,12 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-} from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
-import { DatePicker } from "@/components/ui/date-picker";
-import { useRouter } from "next/navigation";
+} from '@/components/ui/form';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
+import { DatePicker } from '@/components/ui/date-picker';
+import { useRouter } from 'next/navigation';
 
 // Define POAP data interface
 interface PoapData {
@@ -30,7 +30,7 @@ interface PoapData {
   website: string | null;
   startDate: string;
   endDate: string;
-  supply: number | null;
+  attendees: number | null;
 }
 
 export function EditPOAPForm({ poapData }: { poapData: PoapData }) {
@@ -41,12 +41,8 @@ export function EditPOAPForm({ poapData }: { poapData: PoapData }) {
   const [uploadError, setUploadError] = useState<string | null>(null);
 
   // Parse ISO strings to Date objects
-  const parsedStartDate = poapData.startDate
-    ? new Date(poapData.startDate)
-    : undefined;
-  const parsedEndDate = poapData.endDate
-    ? new Date(poapData.endDate)
-    : undefined;
+  const parsedStartDate = poapData.startDate ? new Date(poapData.startDate) : undefined;
+  const parsedEndDate = poapData.endDate ? new Date(poapData.endDate) : undefined;
 
   // Store selected dates in local state for better control
   const [startDate, setStartDate] = useState<Date | undefined>(parsedStartDate);
@@ -59,21 +55,21 @@ export function EditPOAPForm({ poapData }: { poapData: PoapData }) {
       title: poapData.title,
       description: poapData.description,
       imageUrl: poapData.imageUrl,
-      website: poapData.website || "",
+      website: poapData.website || '',
       startDate: parsedStartDate,
       endDate: parsedEndDate,
-      supply: poapData.supply || undefined,
+      attendees: poapData.attendees || undefined,
     },
   });
 
   // Sync local date state with form
   useEffect(() => {
     if (startDate) {
-      form.setValue("startDate", startDate, { shouldValidate: true });
+      form.setValue('startDate', startDate, { shouldValidate: true });
     }
 
     if (endDate) {
-      form.setValue("endDate", endDate, { shouldValidate: true });
+      form.setValue('endDate', endDate, { shouldValidate: true });
     }
   }, [startDate, endDate, form]);
 
@@ -82,22 +78,22 @@ export function EditPOAPForm({ poapData }: { poapData: PoapData }) {
     try {
       // Create a FormData object
       const formData = new FormData();
-      formData.append("file", file);
+      formData.append('file', file);
 
       // Simulate progress since fetch doesn't have built-in progress tracking
       setUploadProgress(10);
 
       // Simulate progress to 40% after 500ms to show activity
       const progressInterval = setInterval(() => {
-        setUploadProgress((prev) => {
+        setUploadProgress(prev => {
           const nextProgress = prev + 5;
           return nextProgress < 40 ? nextProgress : 40;
         });
       }, 500);
 
       // Upload the file to our API endpoint
-      const response = await fetch("/api/upload", {
-        method: "POST",
+      const response = await fetch('/api/upload', {
+        method: 'POST',
         body: formData,
       });
 
@@ -107,7 +103,7 @@ export function EditPOAPForm({ poapData }: { poapData: PoapData }) {
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to upload image");
+        throw new Error(errorData.error || 'Failed to upload image');
       }
 
       setUploadProgress(90);
@@ -117,7 +113,7 @@ export function EditPOAPForm({ poapData }: { poapData: PoapData }) {
 
       return data.url;
     } catch (error) {
-      console.error("Error uploading image:", error);
+      console.error('Error uploading image:', error);
       throw error;
     }
   };
@@ -132,44 +128,43 @@ export function EditPOAPForm({ poapData }: { poapData: PoapData }) {
 
     // Initial validation for required fields
     if (!startDate) {
-      setUploadError("Please select a start date");
+      setUploadError('Please select a start date');
       setIsSubmitting(false);
       return;
     }
 
     if (!endDate) {
-      setUploadError("Please select an end date");
+      setUploadError('Please select an end date');
       setIsSubmitting(false);
       return;
     }
 
     // Debug dates
-    console.log("Start date before submission:", {
+    console.log('Start date before submission:', {
       value: startDate,
       type: typeof startDate,
       isDate: startDate instanceof Date,
-      iso: startDate instanceof Date ? startDate.toISOString() : "Not a date",
+      iso: startDate instanceof Date ? startDate.toISOString() : 'Not a date',
     });
 
-    console.log("End date before submission:", {
+    console.log('End date before submission:', {
       value: endDate,
       type: typeof endDate,
       isDate: endDate instanceof Date,
-      iso: endDate instanceof Date ? endDate.toISOString() : "Not a date",
+      iso: endDate instanceof Date ? endDate.toISOString() : 'Not a date',
     });
 
     try {
       // Handle image upload first if there's a file
-      let imageUrl = form.getValues("imageUrl");
+      let imageUrl = form.getValues('imageUrl');
 
       if (imageFile) {
         try {
           // Use server-side upload instead of direct Supabase upload
           imageUrl = await uploadImageToServer(imageFile);
-          form.setValue("imageUrl", imageUrl, { shouldValidate: true });
+          form.setValue('imageUrl', imageUrl, { shouldValidate: true });
         } catch (error) {
-          const errorMessage =
-            error instanceof Error ? error.message : "Failed to upload image";
+          const errorMessage = error instanceof Error ? error.message : 'Failed to upload image';
           setUploadError(errorMessage);
           setIsSubmitting(false);
           return;
@@ -179,10 +174,8 @@ export function EditPOAPForm({ poapData }: { poapData: PoapData }) {
       // Now trigger the form validation and submission
       form.handleSubmit(onSubmit)();
     } catch (error) {
-      console.error("Error in submission:", error);
-      setUploadError(
-        error instanceof Error ? error.message : "Error processing form"
-      );
+      console.error('Error in submission:', error);
+      setUploadError(error instanceof Error ? error.message : 'Error processing form');
       setIsSubmitting(false);
     }
   };
@@ -192,7 +185,7 @@ export function EditPOAPForm({ poapData }: { poapData: PoapData }) {
       // At this point, startDate and endDate should be defined
       // because we check them in the handleSubmit function
       if (!startDate || !endDate) {
-        throw new Error("Missing date values");
+        throw new Error('Missing date values');
       }
 
       // Format dates for submission
@@ -203,13 +196,13 @@ export function EditPOAPForm({ poapData }: { poapData: PoapData }) {
         endDate: endDate.toISOString(),
       };
 
-      console.log("Submitting data:", formattedData);
+      console.log('Submitting data:', formattedData);
 
       // Submit the form data to update the POAP
       const response = await fetch(`/api/poaps/${poapData.id}`, {
-        method: "PUT",
+        method: 'PUT',
         headers: {
-          "Content-Type": "application/json",
+          'Content-Type': 'application/json',
         },
         body: JSON.stringify(formattedData),
       });
@@ -217,20 +210,16 @@ export function EditPOAPForm({ poapData }: { poapData: PoapData }) {
       const responseData = await response.json();
 
       if (!response.ok) {
-        console.error("API response error:", responseData);
-        throw new Error(
-          responseData.error || responseData.message || "Failed to update POAP"
-        );
+        console.error('API response error:', responseData);
+        throw new Error(responseData.error || responseData.message || 'Failed to update POAP');
       }
 
       // Success! Redirect to the POAPs list
-      router.push("/poaps");
+      router.push('/poaps');
       router.refresh();
     } catch (error) {
-      console.error("Error updating POAP:", error);
-      setUploadError(
-        error instanceof Error ? error.message : "Failed to update POAP"
-      );
+      console.error('Error updating POAP:', error);
+      setUploadError(error instanceof Error ? error.message : 'Failed to update POAP');
       setIsSubmitting(false);
     }
   };
@@ -242,7 +231,7 @@ export function EditPOAPForm({ poapData }: { poapData: PoapData }) {
       // Set a temporary URL for preview
       const reader = new FileReader();
       reader.onload = () => {
-        form.setValue("imageUrl", ""); // Clear any existing URL
+        form.setValue('imageUrl', ''); // Clear any existing URL
         setUploadProgress(0); // Reset progress
       };
       reader.readAsDataURL(file);
@@ -251,13 +240,13 @@ export function EditPOAPForm({ poapData }: { poapData: PoapData }) {
 
   // Handle date selection with local state
   const handleStartDateChange = (date: Date | undefined) => {
-    console.log("Setting start date:", date);
+    console.log('Setting start date:', date);
     // Ensure we have a valid Date object
     setStartDate(date ? new Date(date) : undefined);
   };
 
   const handleEndDateChange = (date: Date | undefined) => {
-    console.log("Setting end date:", date);
+    console.log('Setting end date:', date);
     // Ensure we have a valid Date object
     setEndDate(date ? new Date(date) : undefined);
   };
@@ -313,21 +302,18 @@ export function EditPOAPForm({ poapData }: { poapData: PoapData }) {
           render={({ field }) => (
             <FormItem>
               <FormLabel>
-                Image{" "}
-                <span className="text-xs text-neutral-500">
-                  (stored in Supabase Storage)
-                </span>
+                Image <span className="text-xs text-neutral-500">(stored in Supabase Storage)</span>
               </FormLabel>
               <FormControl>
                 <div className="space-y-2">
                   {/* File Upload Area */}
                   <div
                     className={`relative border-2 border-dashed rounded-lg p-6 transition-colors 
-                    ${imageFile ? "h-[250px]" : "h-[150px]"} 
+                    ${imageFile ? 'h-[250px]' : 'h-[150px]'} 
                     ${
                       uploadError
-                        ? "border-red-300 bg-red-50"
-                        : "border-neutral-200 hover:border-neutral-300"
+                        ? 'border-red-300 bg-red-50'
+                        : 'border-neutral-200 hover:border-neutral-300'
                     }`}
                   >
                     {imageFile ? (
@@ -364,14 +350,14 @@ export function EditPOAPForm({ poapData }: { poapData: PoapData }) {
                           type="button"
                           onClick={() => {
                             handleFileChange(null);
-                            field.onChange("");
+                            field.onChange('');
                           }}
                           className="absolute top-2 right-2 bg-white/80 hover:bg-white p-1 rounded-full text-neutral-700"
                         >
                           <X size={16} />
                         </button>
                       </div>
-                    ) : field.value && !field.value.startsWith("data:") ? (
+                    ) : field.value && !field.value.startsWith('data:') ? (
                       // Remote Image URL display
                       <div className="h-full w-full flex items-center justify-center relative overflow-hidden">
                         <img
@@ -382,7 +368,7 @@ export function EditPOAPForm({ poapData }: { poapData: PoapData }) {
                         <button
                           type="button"
                           onClick={() => {
-                            field.onChange("");
+                            field.onChange('');
                           }}
                           className="absolute top-2 right-2 bg-white/80 hover:bg-white p-1 rounded-full text-neutral-700"
                         >
@@ -396,16 +382,14 @@ export function EditPOAPForm({ poapData }: { poapData: PoapData }) {
                         <p className="text-sm text-neutral-500 mb-1">
                           Drag and drop your image here, or click to browse
                         </p>
-                        <p className="text-xs text-neutral-400">
-                          JPG, PNG, WEBP, or GIF up to 5MB
-                        </p>
+                        <p className="text-xs text-neutral-400">JPG, PNG, WEBP, or GIF up to 5MB</p>
                       </div>
                     )}
                     <input
                       type="file"
                       accept="image/jpeg,image/png,image/webp,image/gif"
                       className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                      onChange={(e) => {
+                      onChange={e => {
                         const file = e.target.files?.[0] || null;
                         handleFileChange(file);
                       }}
@@ -414,14 +398,12 @@ export function EditPOAPForm({ poapData }: { poapData: PoapData }) {
                   </div>
 
                   <div className="flex flex-col space-y-2">
-                    <p className="text-xs text-neutral-500 font-medium">
-                      Or enter an image URL:
-                    </p>
+                    <p className="text-xs text-neutral-500 font-medium">Or enter an image URL:</p>
                     <div className="flex gap-2">
                       <Input
                         placeholder="https://example.com/image.jpg"
                         value={field.value}
-                        onChange={(e) => {
+                        onChange={e => {
                           field.onChange(e.target.value);
                           setImageFile(null);
                         }}
@@ -432,7 +414,7 @@ export function EditPOAPForm({ poapData }: { poapData: PoapData }) {
                           type="button"
                           variant="outline"
                           size="icon"
-                          onClick={() => field.onChange("")}
+                          onClick={() => field.onChange('')}
                         >
                           <X size={16} />
                         </Button>
@@ -464,8 +446,8 @@ export function EditPOAPForm({ poapData }: { poapData: PoapData }) {
           <div className="col-span-full mb-2">
             <div className="flex items-center gap-2 text-sm text-neutral-500">
               <p>
-                You can enter dates by typing (MM/DD/YYYY format) or using the
-                calendar picker. Start date and end date can be the same day.
+                You can enter dates by typing (MM/DD/YYYY format) or using the calendar picker.
+                Start date and end date can be the same day.
               </p>
             </div>
           </div>
@@ -517,23 +499,21 @@ export function EditPOAPForm({ poapData }: { poapData: PoapData }) {
 
         <FormField
           control={form.control}
-          name="supply"
+          name="attendees"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Supply</FormLabel>
+              <FormLabel>Attendees</FormLabel>
               <FormControl>
                 <Input
                   type="number"
-                  placeholder="Enter maximum supply"
+                  placeholder="Enter maximum attendees"
                   disabled={isSubmitting}
                   {...field}
-                  onChange={(e) => {
-                    const value = e.target.value
-                      ? parseInt(e.target.value)
-                      : undefined;
+                  onChange={e => {
+                    const value = e.target.value ? parseInt(e.target.value) : undefined;
                     field.onChange(value);
                   }}
-                  value={field.value || ""}
+                  value={field.value || ''}
                 />
               </FormControl>
               <FormMessage />
@@ -553,19 +533,15 @@ export function EditPOAPForm({ poapData }: { poapData: PoapData }) {
             </Button>
             <DeletePOAPButton
               poapId={poapData.id}
-              onSuccess={() => router.push("/poaps")}
+              onSuccess={() => router.push('/poaps')}
               variant="ghost"
             />
           </div>
           <Button type="submit" disabled={isSubmitting}>
             {isSubmitting ? (
-              <>
-                {uploadProgress > 0 && uploadProgress < 100
-                  ? "Uploading..."
-                  : "Updating..."}
-              </>
+              <>{uploadProgress > 0 && uploadProgress < 100 ? 'Uploading...' : 'Updating...'}</>
             ) : (
-              "Update POAP"
+              'Update POAP'
             )}
           </Button>
         </div>

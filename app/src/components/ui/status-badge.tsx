@@ -17,4 +17,4 @@ export function StatusBadge({ children, className }: StatusBadgeProps) {
       {children}
     </div>
   );
-} 
+}

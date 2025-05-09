@@ -1,24 +1,16 @@
-"use client";
+'use client';
 
-import { useEffect, useState } from "react";
-import { POAPForm } from "./POAPForm";
-import { AlertCircle, Bug } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { useEffect, useState } from 'react';
+import { POAPForm } from './POAPForm';
+import { AlertCircle, Bug } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface EditPOAPProps {
   id: string;
 }
 
-function Skeleton({
-  className,
-  ...props
-}: React.HTMLAttributes<HTMLDivElement>) {
-  return (
-    <div
-      className={cn("animate-pulse rounded-md bg-neutral-100", className)}
-      {...props}
-    />
-  );
+function Skeleton({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
+  return <div className={cn('animate-pulse rounded-md bg-neutral-100', className)} {...props} />;
 }
 
 export function EditPOAP({ id }: EditPOAPProps) {
@@ -33,37 +25,37 @@ export function EditPOAP({ id }: EditPOAPProps) {
         setIsLoading(true);
         setError(null);
         setDebugInfo(null);
-        
+
         console.log(`Fetching POAP with ID: ${id}`);
         const response = await fetch(`/api/poaps/${id}`);
-        
+
         // Get response status details
         const statusInfo = {
           status: response.status,
           statusText: response.statusText,
-          ok: response.ok
+          ok: response.ok,
         };
-        console.log("Response status:", statusInfo);
-        
+        console.log('Response status:', statusInfo);
+
         if (!response.ok) {
           throw new Error(`Failed to fetch POAP data: ${response.status} ${response.statusText}`);
         }
-        
+
         const responseData = await response.json();
-        console.log("Raw API response:", responseData);
-        
+        console.log('Raw API response:', responseData);
+
         // Store debug info
         setDebugInfo(responseData);
-        
+
         // Check if the response contains the POAP property
         if (!responseData.poap) {
-          throw new Error("Invalid response format from API - missing poap property");
+          throw new Error('Invalid response format from API - missing poap property');
         }
-        
+
         // Extract the POAP data from the response
         const poapDetails = responseData.poap;
-        console.log("Extracted POAP data:", poapDetails);
-        
+        console.log('Extracted POAP data:', poapDetails);
+
         // Convert string dates to Date objects
         const formattedData = {
           ...poapDetails,
@@ -71,11 +63,11 @@ export function EditPOAP({ id }: EditPOAPProps) {
           startDate: poapDetails.startDate ? new Date(poapDetails.startDate) : undefined,
           endDate: poapDetails.endDate ? new Date(poapDetails.endDate) : undefined,
         };
-        
+
         setPoapData(formattedData);
       } catch (error) {
-        console.error("Error fetching POAP:", error);
-        setError(error instanceof Error ? error.message : "An error occurred");
+        console.error('Error fetching POAP:', error);
+        setError(error instanceof Error ? error.message : 'An error occurred');
       } finally {
         setIsLoading(false);
       }
@@ -100,7 +92,7 @@ export function EditPOAP({ id }: EditPOAPProps) {
             <p className="text-sm">{error}</p>
           </div>
         </div>
-        
+
         {debugInfo && (
           <div className="bg-amber-50 border border-amber-200 rounded-md p-4">
             <div className="flex items-center gap-2 mb-2">
@@ -117,13 +109,13 @@ export function EditPOAP({ id }: EditPOAPProps) {
   }
 
   return (
-    <POAPForm 
-      mode="edit" 
+    <POAPForm
+      mode="edit"
       initialData={poapData}
-      onSuccess={(data) => {
+      onSuccess={data => {
         // You can customize success behavior here
-        window.location.href = "/poaps";
-      }} 
+        window.location.href = '/poaps';
+      }}
     />
   );
 }
@@ -145,4 +137,4 @@ function LoadingSkeleton() {
       </div>
     </div>
   );
-} 
+}

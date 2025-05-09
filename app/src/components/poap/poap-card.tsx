@@ -7,6 +7,7 @@ import { POAPMetadata } from './poap-metadata';
 import { POAPActions } from './poap-actions';
 import { getStatusDisplay } from '@/lib/poap-utils';
 import { StatusIcon } from './status-icon';
+import { DistributionBadge } from './distribution-badge';
 
 interface POAPCardProps {
   poap: PoapItem;
@@ -14,7 +15,11 @@ interface POAPCardProps {
 
 export function POAPCard({ poap }: POAPCardProps) {
   const statusDisplay = getStatusDisplay(poap.status);
-  
+
+  // Filter to only show active (not disabled or deleted) distribution methods
+  const activeDistributionMethods =
+    poap.distributionMethods?.filter(method => !method.disabled && !method.deleted) || [];
+
   return (
     <div
       key={poap.id}
@@ -31,7 +36,7 @@ export function POAPCard({ poap }: POAPCardProps) {
 
       <div className="flex flex-col md:flex-row gap-4 md:gap-6 relative">
         {/* POAP Image component */}
-        <POAPImage 
+        <POAPImage
           id={poap.id}
           imageUrl={poap.imageUrl}
           title={poap.title}
@@ -45,42 +50,33 @@ export function POAPCard({ poap }: POAPCardProps) {
               <h2 className="text-xl font-semibold text-neutral-800 group-hover:text-neutral-900 transition-colors">
                 {poap.title}
               </h2>
-              <div className="flex flex-wrap gap-2">
-                {/* Single status badge */}
-                <StatusBadge
-                  className={cn(
-                    statusDisplay.bgColor,
-                    statusDisplay.color,
-                    statusDisplay.borderColor,
-                    'border'
-                  )}
-                >
-                  <span className="flex items-center gap-1.5">
-                    <StatusIcon iconName={statusDisplay.iconName} />
-                    {poap.status}
-                  </span>
-                </StatusBadge>
-              </div>
             </div>
 
-            <p className="text-neutral-600 mb-5 line-clamp-3">{poap.description}</p>
+            <p className="text-neutral-600 mb-3 line-clamp-3">{poap.description}</p>
+
+            {/* Distribution method badges - show for all active methods */}
+            {activeDistributionMethods.length > 0 && (
+              <div className="flex gap-2 flex-wrap z-20 relative mb-3">
+                {activeDistributionMethods.map(method => (
+                  <div key={method.id}>
+                    <DistributionBadge type={method.type} method={method} />
+                  </div>
+                ))}
+              </div>
+            )}
 
             {/* POAP Metadata component */}
-            <POAPMetadata 
+            <POAPMetadata
               startDate={poap.startDate}
               endDate={poap.endDate}
-              supply={poap.supply}
+              attendees={poap.attendees}
             />
           </div>
 
           {/* POAP Actions component */}
-          <POAPActions 
-            id={poap.id}
-            title={poap.title}
-            website={poap.website}
-          />
+          <POAPActions id={poap.id} title={poap.title} website={poap.website} />
         </div>
       </div>
     </div>
   );
-} 
+}

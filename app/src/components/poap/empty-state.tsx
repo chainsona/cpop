@@ -10,4 +10,4 @@ export function EmptyState() {
       </Link>
     </div>
   );
-} 
+}

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { poapFormSchema } from '@/lib/validations';
+import { z } from 'zod';
 import { AlertCircle, UploadCloud, Image as ImageIcon, X } from 'lucide-react';
 
 import {
@@ -38,9 +39,22 @@ interface POAPFormProps {
     endDate?: Date;
     supply?: number;
     status?: 'Draft' | 'Published' | 'Distributed';
+    attendees?: number;
   };
   onSuccess?: (data: any) => void;
 }
+
+// Define type with status field to match the form
+type FormValues = {
+  title: string;
+  description: string;
+  imageUrl: string;
+  startDate?: Date;
+  endDate?: Date;
+  attendees?: number;
+  website?: string;
+  status?: 'Draft' | 'Published' | 'Distributed';
+};
 
 export function POAPForm({ mode = 'create', initialData, onSuccess }: POAPFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -52,17 +66,17 @@ export function POAPForm({ mode = 'create', initialData, onSuccess }: POAPFormPr
   const [startDate, setStartDate] = useState<Date | undefined>(initialData?.startDate);
   const [endDate, setEndDate] = useState<Date | undefined>(initialData?.endDate);
 
-  // Using a more permissive type to avoid TS issues while preserving functionality
-  const form = useForm({
-    resolver: zodResolver(poapFormSchema),
+  // Using a more permissive type to avoid TS issues
+  const form = useForm<any>({
+    resolver: zodResolver(poapFormSchema) as any,
     defaultValues: {
       title: initialData?.title || '',
       description: initialData?.description || '',
       imageUrl: initialData?.imageUrl || '',
       website: initialData?.website || '',
-      startDate: initialData?.startDate,
-      endDate: initialData?.endDate,
-      supply: initialData?.supply,
+      startDate: initialData?.startDate ? new Date(initialData.startDate) : undefined,
+      endDate: initialData?.endDate ? new Date(initialData.endDate) : undefined,
+      attendees: initialData?.attendees,
       status: initialData?.status || 'Draft',
     },
   });
@@ -537,14 +551,14 @@ export function POAPForm({ mode = 'create', initialData, onSuccess }: POAPFormPr
 
         <FormField
           control={form.control}
-          name="supply"
+          name="attendees"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Supply (Optional)</FormLabel>
+              <FormLabel>Attendees (Optional)</FormLabel>
               <FormControl>
                 <Input
                   type="number"
-                  placeholder="Enter maximum supply"
+                  placeholder="Enter maximum attendees"
                   disabled={isSubmitting}
                   {...field}
                   onChange={e => {

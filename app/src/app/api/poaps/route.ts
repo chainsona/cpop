@@ -88,8 +88,8 @@ export async function POST(req: NextRequest) {
         website: validatedData.website || null,
         startDate,
         endDate,
-        supply: validatedData.supply || null,
-        status: validatedData.status || 'Draft',
+        attendees: validatedData.attendees || null,
+        status: 'Draft',
       },
     });
 

@@ -7,7 +7,7 @@ A Next.js application for creating Proof of Attendance Protocol (POAP) tokens wi
 Create a `.env.local` file at the root of your project with the following variables:
 
 ```
-# Supabase 
+# Supabase
 NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
@@ -55,6 +55,7 @@ pnpm dev
 ## Getting Started
 
 1. Install dependencies:
+
    ```bash
    pnpm install
    ```
@@ -62,11 +63,13 @@ pnpm dev
 2. Copy the environment variables from the documentation to a `.env` file in the root directory.
 
 3. Set up the database:
+
    ```bash
    pnpm prisma migrate dev
    ```
 
 4. Run the development server:
+
 ```bash
 pnpm dev
 ```

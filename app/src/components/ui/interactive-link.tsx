@@ -1,8 +1,8 @@
 'use client';
 
-import Link from "next/link";
-import { ExternalLink } from "lucide-react";
-import { ReactNode } from "react";
+import Link from 'next/link';
+import { ExternalLink } from 'lucide-react';
+import { ReactNode } from 'react';
 
 interface ExternalLinkProps {
   href: string;
@@ -11,7 +11,12 @@ interface ExternalLinkProps {
   ariaLabel?: string;
 }
 
-export function InteractiveExternalLink({ href, children, className, ariaLabel }: ExternalLinkProps) {
+export function InteractiveExternalLink({
+  href,
+  children,
+  className,
+  ariaLabel,
+}: ExternalLinkProps) {
   return (
     <a
       href={href}
@@ -19,7 +24,7 @@ export function InteractiveExternalLink({ href, children, className, ariaLabel }
       rel="noopener noreferrer"
       className={className}
       aria-label={ariaLabel}
-      onClick={(e) => e.stopPropagation()}
+      onClick={e => e.stopPropagation()}
     >
       {children}
       <ExternalLink className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
@@ -36,13 +41,13 @@ interface EditLinkProps {
 
 export function InteractiveEditLink({ href, children, className, ariaLabel }: EditLinkProps) {
   return (
-    <Link 
+    <Link
       href={href}
       className={className}
       aria-label={ariaLabel}
-      onClick={(e) => e.stopPropagation()}
+      onClick={e => e.stopPropagation()}
     >
       {children}
     </Link>
   );
-} 
+}

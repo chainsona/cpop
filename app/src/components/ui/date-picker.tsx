@@ -1,10 +1,10 @@
-import * as React from "react";
-import { format, parse, isValid } from "date-fns";
-import { Calendar as CalendarIcon, Info } from "lucide-react";
-import { DayPicker } from "react-day-picker";
-import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import * as React from 'react';
+import { format, parse, isValid } from 'date-fns';
+import { Calendar as CalendarIcon, Info } from 'lucide-react';
+import { DayPicker } from 'react-day-picker';
+import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 
 interface DatePickerProps {
   date?: Date;
@@ -20,22 +20,20 @@ export function DatePicker({
   onChange,
   disabled,
   className,
-  placeholder = "Pick a date",
+  placeholder = 'Pick a date',
   showFormatHint = true,
 }: DatePickerProps) {
   const [isOpen, setIsOpen] = React.useState(false);
-  const [inputValue, setInputValue] = React.useState(
-    date ? format(date, "MM/dd/yyyy") : ""
-  );
+  const [inputValue, setInputValue] = React.useState(date ? format(date, 'MM/dd/yyyy') : '');
   const [error, setError] = React.useState<string | null>(null);
 
   // Update input value when date prop changes from outside
   React.useEffect(() => {
     if (date) {
-      setInputValue(format(date, "MM/dd/yyyy"));
+      setInputValue(format(date, 'MM/dd/yyyy'));
       setError(null);
     } else if (date === undefined) {
-      setInputValue("");
+      setInputValue('');
       setError(null);
     }
   }, [date]);
@@ -53,7 +51,7 @@ export function DatePicker({
       if (!value.trim()) return undefined;
 
       // Try to parse using format MM/dd/yyyy
-      const parsedDate = parse(value, "MM/dd/yyyy", new Date());
+      const parsedDate = parse(value, 'MM/dd/yyyy', new Date());
 
       // Check if valid date and within reasonable range
       if (isValid(parsedDate)) {
@@ -79,7 +77,7 @@ export function DatePicker({
 
     // Only update if the date is valid or empty
     if (parsedDate) {
-      console.log("Manual date input parsed:", parsedDate);
+      console.log('Manual date input parsed:', parsedDate);
       onChange(parsedDate);
     } else if (!value) {
       // Empty input, clear the date
@@ -94,7 +92,7 @@ export function DatePicker({
     if (parsedDate) {
       onChange(parsedDate);
       // Format it consistently
-      setInputValue(format(parsedDate, "MM/dd/yyyy"));
+      setInputValue(format(parsedDate, 'MM/dd/yyyy'));
       setError(null);
     } else if (!inputValue) {
       // Empty is valid - just no date
@@ -102,27 +100,27 @@ export function DatePicker({
       setError(null);
     } else {
       // Invalid date format
-      setError("Invalid date format");
+      setError('Invalid date format');
 
       // If we already had a date, restore it
       if (date) {
-        setInputValue(format(date, "MM/dd/yyyy"));
+        setInputValue(format(date, 'MM/dd/yyyy'));
       } else {
-        setInputValue("");
+        setInputValue('');
       }
     }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     // Submit on Enter key if date is valid
-    if (e.key === "Enter") {
+    if (e.key === 'Enter') {
       e.preventDefault();
       handleInputBlur();
     }
   };
 
   return (
-    <div className={cn("relative space-y-1", className)}>
+    <div className={cn('relative space-y-1', className)}>
       <div className="flex gap-2 items-center">
         <div className="relative flex-1">
           <Input
@@ -135,10 +133,7 @@ export function DatePicker({
             disabled={disabled}
             aria-label={placeholder}
             aria-invalid={!!error}
-            className={cn(
-              "w-full pr-3",
-              error && "border-red-500 focus-visible:ring-red-500"
-            )}
+            className={cn('w-full pr-3', error && 'border-red-500 focus-visible:ring-red-500')}
           />
         </div>
         <Button
@@ -172,8 +167,8 @@ export function DatePicker({
             showOutsideDays
             className="p-0"
             classNames={{
-              day_selected: "bg-neutral-900 text-white",
-              day_today: "bg-neutral-100",
+              day_selected: 'bg-neutral-900 text-white',
+              day_today: 'bg-neutral-100',
             }}
           />
           <div className="pt-2 text-center">

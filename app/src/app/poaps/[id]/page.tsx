@@ -1,18 +1,29 @@
-import { prisma } from '@/lib/db';
+'use client';
+
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { formatDateRange } from '@/lib/date-utils';
-import { Calendar, Hash, ArrowLeft, Pencil, FilePenLine, BookOpen, Award } from 'lucide-react';
+import {
+  Calendar,
+  Hash,
+  ArrowLeft,
+  Pencil,
+  FilePenLine,
+  BookOpen,
+  Award,
+  Users,
+  User,
+  Settings,
+  AlertTriangle
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { InteractiveExternalLink } from '@/components/ui/interactive-link';
-
-interface PageProps {
-  params: Promise<{
-    id: string;
-  }>;
-}
-
+import { ConfigStatusCard } from '@/components/poap/config-status-card';
+import { POAPTabNav } from '@/components/poap/poap-tab-nav';
+import { useEffect, useState } from 'react';
+import { usePageTitle } from '@/contexts/page-title-context';
+import { usePathname } from 'next/navigation';
 // Define the POAP type including status
 interface POAP {
   id: string;
@@ -22,8 +33,8 @@ interface POAP {
   website: string | null;
   startDate: Date;
   endDate: Date;
-  supply: number | null;
-  status: 'Draft' | 'Published' | 'Distributed';
+  attendees: number | null;
+  status: 'Draft' | 'Published' | 'Distributed' | 'Unclaimable';
   createdAt: Date;
   updatedAt: Date;
 }
@@ -80,7 +91,7 @@ function getColorPaletteForId(id: string): (typeof COLOR_PALETTES)[0] {
 }
 
 // Get status display information
-function getStatusDisplay(status: 'Draft' | 'Published' | 'Distributed') {
+function getStatusDisplay(status: 'Draft' | 'Published' | 'Distributed' | 'Unclaimable') {
   switch (status) {
     case 'Draft':
       return {
@@ -106,21 +117,190 @@ function getStatusDisplay(status: 'Draft' | 'Published' | 'Distributed') {
         borderColor: 'border-green-200',
         icon: <Award className="h-3.5 w-3.5" />,
       };
+    case 'Unclaimable':
+      return {
+        label: 'Unclaimable',
+        color: 'text-amber-600',
+        bgColor: 'bg-amber-100',
+        borderColor: 'border-amber-200',
+        icon: <AlertTriangle className="h-3.5 w-3.5" />,
+      };
   }
 }
 
-export default async function POAPDetailPage(props: PageProps) {
-  // Await the params object before accessing its properties per Next.js 15 requirement
-  const { id } = await props.params;
+export default function POAPDetailPage() {
+  const pathname = usePathname();
+  const id = pathname.split('/')[2]; // Extract ID from URL path: /poaps/[id]
+  
+  const { setPageTitle } = usePageTitle();
+  const [poap, setPoap] = useState<POAP | null>(null);
+  const [distributionStatus, setDistributionStatus] = useState<
+    'complete' | 'incomplete' | 'partial'
+  >('incomplete');
+  const [distributionSummary, setDistributionSummary] = useState('No claim methods configured');
+  const [attributesStatus, setAttributesStatus] = useState<
+    'complete' | 'incomplete' | 'partial'
+  >('incomplete');
+  const [attributesSummary, setAttributesSummary] = useState('No attributes configured');
+  const [settingsStatus, setSettingsStatus] = useState<
+    'complete' | 'incomplete' | 'partial'
+  >('incomplete');
+  const [settingsSummary, setSettingsSummary] = useState('Default settings');
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // Fetch the POAP from the database
-  const poap = (await prisma.poap.findUnique({
-    where: { id },
-  })) as POAP | null; // Add explicit casting
+  // Fetch POAP data
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setIsLoading(true);
 
-  // If POAP not found, return 404
-  if (!poap) {
-    notFound();
+        // Fetch POAP details
+        const poapResponse = await fetch(`/api/poaps/${id}`);
+        if (!poapResponse.ok) {
+          if (poapResponse.status === 404) {
+            notFound();
+          }
+          throw new Error('Failed to fetch POAP');
+        }
+
+        const poapData = await poapResponse.json();
+        setPoap(poapData.poap);
+
+        // Set page title based on POAP title
+        if (poapData.poap?.title) {
+          setPageTitle(poapData.poap.title);
+        }
+
+        // Fetch distribution methods
+        const distributionResponse = await fetch(`/api/poaps/${id}/distribution`);
+        if (distributionResponse.ok) {
+          const data = await distributionResponse.json();
+          const methods = data.distributionMethods || [];
+          const activeMethods = methods.filter((method: any) => !method.disabled);
+
+          if (activeMethods.length > 0) {
+            setDistributionStatus('complete');
+            if (activeMethods.length === 1) {
+              setDistributionSummary('1 claim method configured');
+            } else {
+              setDistributionSummary(`${activeMethods.length} claim methods configured`);
+            }
+          }
+        }
+        
+        // Fetch attributes
+        try {
+          const attributesResponse = await fetch(`/api/poaps/${id}/attributes`);
+          if (attributesResponse.ok) {
+            const data = await attributesResponse.json();
+            
+            if (data.attributes) {
+              // Check if all essential fields are filled
+              const attrs = data.attributes;
+              const hasEventType = !!attrs.eventType;
+              const hasLocation = !!(attrs.eventType === 'Physical' && attrs.city);
+              const hasPlatform = !!(attrs.eventType === 'Online' && attrs.platform);
+              const hasArtists = !!(attrs.artists && attrs.artists.length > 0);
+              const hasOrganization = !!attrs.organization;
+              
+              let summary = '';
+              let status: 'complete' | 'incomplete' | 'partial' = 'incomplete';
+              
+              // Determine the status based on field completeness
+              if (hasEventType && (hasLocation || hasPlatform)) {
+                if (hasArtists && hasOrganization) {
+                  status = 'complete';
+                  summary = 'All attributes configured';
+                } else {
+                  status = 'partial';
+                  const missing = [];
+                  if (!hasArtists) missing.push('artist');
+                  if (!hasOrganization) missing.push('organization');
+                  summary = `${attrs.eventType === 'Physical' ? 'Location' : 'Platform'} set, ${missing.join(' and ')} missing`;
+                }
+              } else {
+                status = 'incomplete';
+                summary = 'Basic attributes missing';
+              }
+              
+              setAttributesStatus(status);
+              setAttributesSummary(summary);
+            }
+          } else if (attributesResponse.status !== 404) {
+            // Only log errors that aren't 404 (404 is expected when no attributes exist yet)
+            console.error('Error fetching attributes:', await attributesResponse.text());
+          }
+        } catch (attrError) {
+          console.error('Exception fetching attributes:', attrError);
+        }
+        
+        // Fetch settings
+        try {
+          const settingsResponse = await fetch(`/api/poaps/${id}/settings`);
+          if (settingsResponse.ok) {
+            const data = await settingsResponse.json();
+            
+            if (data.settings) {
+              const settings = data.settings;
+              // Settings are considered complete when at least visibility is set
+              setSettingsStatus('complete');
+              
+              // Generate appropriate summary
+              const visibility = settings.visibility || 'Public';
+              const hasDates = !!(settings.defaultStartDate || settings.defaultEndDate);
+              
+              if (hasDates) {
+                setSettingsSummary(`${visibility} with custom dates`);
+              } else {
+                setSettingsSummary(`${visibility} visibility configured`);
+              }
+            }
+          } else if (settingsResponse.status !== 404) {
+            // Only log errors that aren't 404 (404 is expected when no settings exist yet)
+            console.error('Error fetching settings:', await settingsResponse.text());
+          }
+        } catch (settingsError) {
+          console.error('Exception fetching settings:', settingsError);
+        }
+      } catch (err) {
+        console.error('Error fetching data:', err);
+        setError('Failed to load POAP details');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchData();
+
+    // Clean up - reset page title when leaving the page
+    return () => {
+      setPageTitle('');
+    };
+  }, [id, setPageTitle]);
+
+  if (isLoading) {
+    return (
+      <div className="container mx-auto py-10">
+        <div className="max-w-4xl mx-auto text-center">
+          <div className="animate-spin w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full mx-auto mb-4"></div>
+          <p className="text-neutral-600">Loading POAP details...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !poap) {
+    return (
+      <div className="container mx-auto py-10">
+        <div className="max-w-4xl mx-auto bg-red-50 border border-red-200 rounded-xl p-6 text-center">
+          <p className="text-red-700 mb-4">{error || 'POAP not found'}</p>
+          <Link href="/poaps">
+            <Button>Back to POAPs</Button>
+          </Link>
+        </div>
+      </div>
+    );
   }
 
   // Get color palette and status
@@ -143,7 +323,7 @@ export default async function POAPDetailPage(props: PageProps) {
           </Link>
         </div>
 
-        <div className="bg-white rounded-xl overflow-hidden border border-neutral-200 shadow-sm p-6 md:p-8 transition-all duration-200 hover:shadow-md hover:border-neutral-300">
+        <div className="bg-white rounded-xl overflow-hidden border border-neutral-200 shadow-sm p-6 md:p-8 transition-all duration-200 hover:shadow-md hover:border-neutral-300 mb-8">
           <div className="flex flex-col lg:flex-row gap-8">
             {/* Image section with improved styling */}
             <div className="w-full lg:w-1/3 flex-shrink-0">
@@ -190,16 +370,6 @@ export default async function POAPDetailPage(props: PageProps) {
               <div className="flex justify-between items-start mb-4">
                 <div className="flex items-center gap-3">
                   <h1 className="text-2xl md:text-3xl font-bold text-neutral-900">{poap.title}</h1>
-                  <StatusBadge
-                    className={cn(
-                      statusDisplay.bgColor,
-                      statusDisplay.color,
-                      statusDisplay.borderColor,
-                      'border'
-                    )}
-                  >
-                    {poap.status}
-                  </StatusBadge>
                 </div>
                 <Link href={`/poaps/${id}/edit`}>
                   <Button size="sm" variant="outline" className="gap-1.5">
@@ -225,12 +395,12 @@ export default async function POAPDetailPage(props: PageProps) {
                     </div>
                   </div>
 
-                  {poap.supply && (
+                  {poap.attendees && (
                     <div>
-                      <h3 className="text-sm font-medium text-neutral-500 mb-2">Supply</h3>
+                      <h3 className="text-sm font-medium text-neutral-500 mb-2">Attendees</h3>
                       <div className="flex items-center gap-2 text-neutral-700">
                         <Hash className="h-4 w-4 text-emerald-500" />
-                        {poap.supply.toLocaleString()}
+                        {poap.attendees.toLocaleString()}
                       </div>
                     </div>
                   )}
@@ -253,11 +423,43 @@ export default async function POAPDetailPage(props: PageProps) {
               {/* Metadata and timestamps */}
               <div className="border-t border-neutral-200 pt-4 mt-6">
                 <div className="text-xs text-neutral-500 space-y-1">
-                  <p>Created: {poap.createdAt.toLocaleString()}</p>
-                  <p>Last updated: {poap.updatedAt.toLocaleString()}</p>
+                  <p>Created: {new Date(poap.createdAt).toLocaleString()}</p>
+                  <p>Last updated: {new Date(poap.updatedAt).toLocaleString()}</p>
                   <p>ID: {poap.id}</p>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Use the shared tab navigation component */}
+        <div className="mt-8">
+          <POAPTabNav poapId={id} />
+
+          {/* Overview Tab Content */}
+          <div className="p-6 bg-white border-x border-b border-neutral-200 rounded-b-xl">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+              <ConfigStatusCard
+                title="Distribution"
+                status={distributionStatus}
+                icon={<Users className="h-5 w-5" />}
+                href={`/poaps/${id}/distribution`}
+                summary={distributionSummary}
+              />
+              <ConfigStatusCard
+                title="Attributes"
+                status={attributesStatus}
+                icon={<User className="h-5 w-5" />}
+                href={`/poaps/${id}/attributes`}
+                summary={attributesSummary}
+              />
+              <ConfigStatusCard
+                title="Settings"
+                status={settingsStatus}
+                icon={<Settings className="h-5 w-5" />}
+                href={`/poaps/${id}/settings`}
+                summary={settingsSummary}
+              />
             </div>
           </div>
         </div>
