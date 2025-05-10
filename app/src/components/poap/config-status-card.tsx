@@ -6,7 +6,7 @@ import { CheckCircle, AlertCircle, ChevronRight } from 'lucide-react';
 
 interface ConfigStatusCardProps {
   title: string;
-  status: 'complete' | 'incomplete' | 'partial';
+  status: 'complete' | 'incomplete' | 'partial' | 'error';
   icon: React.ReactNode;
   href: string;
   summary: string;
@@ -22,7 +22,9 @@ export function ConfigStatusCard({ title, status, icon, href, summary }: ConfigS
             ? 'border-green-200 bg-green-50'
             : status === 'partial'
               ? 'border-amber-200 bg-amber-50'
-              : 'border-neutral-200 bg-neutral-50'
+              : status === 'error'
+                ? 'border-red-200 bg-red-50'
+                : 'border-neutral-200 bg-neutral-50'
         )}
       >
         <div className="flex justify-between items-start">
@@ -34,7 +36,9 @@ export function ConfigStatusCard({ title, status, icon, href, summary }: ConfigS
                   ? 'bg-green-100 text-green-600'
                   : status === 'partial'
                     ? 'bg-amber-100 text-amber-600'
-                    : 'bg-neutral-100 text-neutral-600'
+                    : status === 'error'
+                      ? 'bg-red-100 text-red-600'
+                      : 'bg-neutral-100 text-neutral-600'
               )}
             >
               {icon}
@@ -46,6 +50,8 @@ export function ConfigStatusCard({ title, status, icon, href, summary }: ConfigS
               <CheckCircle className="h-5 w-5 text-green-600" />
             ) : status === 'partial' ? (
               <AlertCircle className="h-5 w-5 text-amber-500" />
+            ) : status === 'error' ? (
+              <AlertCircle className="h-5 w-5 text-red-500" />
             ) : (
               <AlertCircle className="h-5 w-5 text-neutral-400" />
             )}

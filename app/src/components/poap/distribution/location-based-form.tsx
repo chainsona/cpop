@@ -4,12 +4,21 @@ import * as React from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Slider } from '@/components/ui/slider';
 import { DatePicker } from '@/components/ui/date-picker';
 import { StepIndicator } from './step-indicator';
-import { MapPin } from 'lucide-react';
+import { MapPin, Search, AlertTriangle, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
+import Script from 'next/script';
+import Link from 'next/link';
+import { Alert, AlertDescription, AlertTitle } from '../../../components/ui/alert';
+import { LocationSearchFallback } from './location-search-fallback';
+
+// Use fallback by default until Google Maps API key is properly configured
+const USE_FALLBACK = true;
+
+// Google Maps API key - should be in env
+const GOOGLE_MAPS_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '';
 
 interface LocationBasedFormProps {
   id: string;
@@ -28,6 +37,45 @@ export function LocationBasedForm({ id, onSuccess }: LocationBasedFormProps) {
   const [startDate, setStartDate] = React.useState<Date | undefined>(undefined);
   const [endDate, setEndDate] = React.useState<Date | undefined>(undefined);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [isLoadingPoap, setIsLoadingPoap] = React.useState(false);
+  const [isMapLoaded, setIsMapLoaded] = React.useState(false);
+  const [mapLoadError, setMapLoadError] = React.useState<string | null>(
+    USE_FALLBACK ? 'Using fallback search by default' : null
+  );
+  const [searchQuery, setSearchQuery] = React.useState('');
+
+  // Fetch POAP details to get dates
+  React.useEffect(() => {
+    const fetchPoapDetails = async () => {
+      try {
+        setIsLoadingPoap(true);
+        const response = await fetch(`/api/poaps/${id}`);
+
+        if (!response.ok) {
+          throw new Error('Failed to fetch POAP details');
+        }
+
+        const data = await response.json();
+
+        // Auto-populate dates from POAP if available
+        if (data.poap) {
+          if (data.poap.startDate && !startDate) {
+            setStartDate(new Date(data.poap.startDate));
+          }
+
+          if (data.poap.endDate && !endDate) {
+            setEndDate(new Date(data.poap.endDate));
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching POAP details:', error);
+      } finally {
+        setIsLoadingPoap(false);
+      }
+    };
+
+    fetchPoapDetails();
+  }, [id]);
 
   const handleSubmit = async () => {
     try {
@@ -82,75 +130,36 @@ export function LocationBasedForm({ id, onSuccess }: LocationBasedFormProps) {
       {step === 1 && (
         <div className="space-y-6">
           <h2 className="text-xl font-semibold">Set Location Details</h2>
-          <p className="text-neutral-600">Define where this POAP can be claimed.</p>
+          <p className="text-neutral-600">Search for a location and set the claim radius.</p>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-md">
-            <div className="md:col-span-2">
-              <Label htmlFor="city" className="required">
-                City
-              </Label>
-              <Input
-                id="city"
-                type="text"
-                placeholder="Enter city name"
-                value={city}
-                onChange={e => setCity(e.target.value)}
-                required
-              />
-            </div>
-
-            <div className="md:col-span-2">
-              <Label htmlFor="country">Country</Label>
-              <Input
-                id="country"
-                type="text"
-                placeholder="Enter country (optional)"
-                value={country}
-                onChange={e => setCountry(e.target.value)}
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="latitude">Latitude</Label>
-              <Input
-                id="latitude"
-                type="number"
-                step="0.000001"
-                placeholder="e.g. 40.7128"
-                value={latitude === undefined ? '' : latitude}
-                onChange={e => setLatitude(e.target.value ? parseFloat(e.target.value) : undefined)}
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="longitude">Longitude</Label>
-              <Input
-                id="longitude"
-                type="number"
-                step="0.000001"
-                placeholder="e.g. -74.0060"
-                value={longitude === undefined ? '' : longitude}
-                onChange={e =>
-                  setLongitude(e.target.value ? parseFloat(e.target.value) : undefined)
-                }
-              />
-            </div>
-          </div>
-
-          {/* Map Placeholder */}
-          <div className="rounded-lg border border-dashed border-neutral-300 bg-neutral-50 p-4 text-center mt-4">
-            <div className="flex flex-col items-center justify-center gap-2 py-8">
-              <MapPin className="h-8 w-8 text-neutral-400" />
-              <p className="text-sm text-neutral-600">
-                Interactive map will be implemented in future updates.
-                <br />
-                For now, please enter the coordinates manually.
-              </p>
-            </div>
-          </div>
+          {/* Always use the OpenStreetMap fallback component */}
+          <LocationSearchFallback
+            initialCity={city}
+            initialCountry={country}
+            initialLatitude={latitude}
+            initialLongitude={longitude}
+            radius={radius}
+            onLocationSelected={({
+              city: newCity,
+              country: newCountry,
+              latitude: newLat,
+              longitude: newLong,
+            }) => {
+              setCity(newCity);
+              setCountry(newCountry);
+              setLatitude(newLat);
+              setLongitude(newLong);
+            }}
+            onRadiusChanged={newRadius => {
+              setRadius(newRadius);
+            }}
+          />
 
           <div className="pt-4">
-            <Button onClick={() => setStep(2)} disabled={!city.trim() || isSubmitting}>
+            <Button
+              onClick={() => setStep(2)}
+              disabled={!city.trim() || !latitude || !longitude || isLoadingPoap}
+            >
               Continue
             </Button>
           </div>
@@ -160,31 +169,9 @@ export function LocationBasedForm({ id, onSuccess }: LocationBasedFormProps) {
       {step === 2 && (
         <div className="space-y-6">
           <h2 className="text-xl font-semibold">Set Claim Parameters</h2>
-          <p className="text-neutral-600">Define the radius and any claim limits.</p>
+          <p className="text-neutral-600">Define any claim limits and availability period.</p>
 
           <div className="space-y-6 max-w-md">
-            <div>
-              <div className="flex justify-between mb-2">
-                <Label htmlFor="radius">Radius (meters)</Label>
-                <span className="text-sm font-medium">{radius}m</span>
-              </div>
-              <Slider
-                id="radius"
-                min={50}
-                max={5000}
-                step={50}
-                value={[radius]}
-                onValueChange={(values: number[]) => setRadius(values[0])}
-              />
-              <div className="flex justify-between text-xs text-neutral-500 mt-1">
-                <span>50m</span>
-                <span>5000m</span>
-              </div>
-              <p className="text-sm text-neutral-500 mt-2">
-                Users must be within this radius of the specified location to claim
-              </p>
-            </div>
-
             <div>
               <Label htmlFor="maxClaims">Maximum number of claims</Label>
               <Input
@@ -202,6 +189,9 @@ export function LocationBasedForm({ id, onSuccess }: LocationBasedFormProps) {
               <div>
                 <Label htmlFor="startDate">Start Date</Label>
                 <DatePicker date={startDate} onChange={setStartDate} />
+                {isLoadingPoap && (
+                  <p className="text-xs text-neutral-500 mt-1">Loading POAP dates...</p>
+                )}
               </div>
               <div>
                 <Label htmlFor="endDate">End Date</Label>
@@ -209,7 +199,9 @@ export function LocationBasedForm({ id, onSuccess }: LocationBasedFormProps) {
               </div>
               <div className="sm:col-span-2">
                 <p className="text-sm text-neutral-500">
-                  Leave dates blank to allow claims at any time
+                  {startDate || endDate
+                    ? "These dates are pre-filled from the POAP's event dates"
+                    : 'Leave dates blank to allow claims at any time'}
                 </p>
               </div>
             </div>

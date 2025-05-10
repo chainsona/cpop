@@ -8,6 +8,8 @@ import { DatePicker } from '@/components/ui/date-picker';
 import { StepIndicator } from './step-indicator';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
+import { Coins, Loader2 } from 'lucide-react';
+import Link from 'next/link';
 
 interface ClaimLinksFormProps {
   id: string;
@@ -20,6 +22,55 @@ export function ClaimLinksForm({ id, onSuccess }: ClaimLinksFormProps) {
   const [amount, setAmount] = React.useState(0);
   const [expiryDate, setExpiryDate] = React.useState<Date | undefined>(undefined);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [isLoadingPoap, setIsLoadingPoap] = React.useState(false);
+  const [isMinting, setIsMinting] = React.useState(false);
+  const [mintProgress, setMintProgress] = React.useState<string>('');
+
+  // Fetch POAP details to get end date
+  React.useEffect(() => {
+    const fetchPoapDetails = async () => {
+      try {
+        setIsLoadingPoap(true);
+        const response = await fetch(`/api/poaps/${id}`);
+
+        if (!response.ok) {
+          throw new Error('Failed to fetch POAP details');
+        }
+
+        const data = await response.json();
+
+        // Auto-populate expiry date from POAP end date if available
+        if (data.poap && data.poap.endDate && !expiryDate) {
+          setExpiryDate(new Date(data.poap.endDate));
+        }
+      } catch (error) {
+        console.error('Error fetching POAP details:', error);
+      } finally {
+        setIsLoadingPoap(false);
+      }
+    };
+
+    fetchPoapDetails();
+  }, [id]);
+
+  // Function to check if token was minted
+  const checkTokenMinted = async (): Promise<{ minted: boolean; mintAddress?: string }> => {
+    try {
+      const response = await fetch(`/api/poaps/${id}`);
+      if (!response.ok) {
+        throw new Error('Failed to check token status');
+      }
+
+      const data = await response.json();
+      return {
+        minted: !!data.poap.token,
+        mintAddress: data.poap.token?.mintAddress,
+      };
+    } catch (error) {
+      console.error('Error checking token status:', error);
+      return { minted: false };
+    }
+  };
 
   const handleSubmit = async () => {
     try {
@@ -46,6 +97,51 @@ export function ClaimLinksForm({ id, onSuccess }: ClaimLinksFormProps) {
 
       toast.success('Claim links created successfully');
 
+      // Check for token minting status
+      setIsMinting(true);
+      setMintProgress('Checking if tokens need to be minted...');
+
+      // Get initial token status
+      const initialStatus = await checkTokenMinted();
+
+      if (!initialStatus.minted) {
+        // If no token exists, show minting in progress indicator
+        setMintProgress('Minting POAP tokens...');
+
+        // Poll for token creation (every 3 seconds for up to 30 seconds)
+        let attempts = 0;
+        const maxAttempts = 10;
+        const interval = setInterval(async () => {
+          attempts++;
+          const status = await checkTokenMinted();
+
+          if (status.minted) {
+            clearInterval(interval);
+            setIsMinting(false);
+
+            // Show success toast with link to token tab
+            toast.success(
+              <div className="flex flex-col gap-2">
+                <div>POAP tokens minted successfully!</div>
+                <Link
+                  href={`/poaps/${id}/token`}
+                  className="inline-flex items-center gap-1.5 text-sm font-medium underline"
+                >
+                  <Coins className="h-4 w-4" />
+                  View token details
+                </Link>
+              </div>
+            );
+          } else if (attempts >= maxAttempts) {
+            clearInterval(interval);
+            setIsMinting(false);
+            console.log('Timeout waiting for token minting');
+          }
+        }, 3000);
+      } else {
+        setIsMinting(false);
+      }
+
       // Refresh the current page instead of redirecting
       router.refresh();
 
@@ -56,6 +152,7 @@ export function ClaimLinksForm({ id, onSuccess }: ClaimLinksFormProps) {
     } catch (error) {
       console.error('Error creating claim links:', error);
       toast.error(error instanceof Error ? error.message : 'Failed to create claim links');
+      setIsMinting(false);
     } finally {
       setIsSubmitting(false);
     }
@@ -85,7 +182,7 @@ export function ClaimLinksForm({ id, onSuccess }: ClaimLinksFormProps) {
           </div>
 
           <div className="pt-4">
-            <Button onClick={() => setStep(2)} disabled={amount <= 0}>
+            <Button onClick={() => setStep(2)} disabled={amount <= 0 || isLoadingPoap}>
               Continue
             </Button>
           </div>
@@ -99,14 +196,27 @@ export function ClaimLinksForm({ id, onSuccess }: ClaimLinksFormProps) {
           <div className="max-w-xs">
             <Label>Expiry Date</Label>
             <DatePicker date={expiryDate} onChange={setExpiryDate} />
-            <p className="text-sm text-neutral-500 mt-2">Leave blank for no expiration</p>
+            {isLoadingPoap && (
+              <p className="text-xs text-neutral-500 mt-1">Loading POAP end date...</p>
+            )}
+            <p className="text-sm text-neutral-500 mt-2">
+              {expiryDate
+                ? "This date is pre-filled from the POAP's end date"
+                : 'Leave blank for no expiration'}
+            </p>
           </div>
 
           <div className="flex gap-3 pt-4">
-            <Button variant="outline" onClick={() => setStep(1)}>
+            <Button
+              variant="outline"
+              onClick={() => setStep(1)}
+              disabled={isSubmitting || isMinting}
+            >
               Back
             </Button>
-            <Button onClick={() => setStep(3)}>Continue</Button>
+            <Button onClick={() => setStep(3)} disabled={isSubmitting || isMinting}>
+              Continue
+            </Button>
           </div>
         </div>
       )}
@@ -129,13 +239,28 @@ export function ClaimLinksForm({ id, onSuccess }: ClaimLinksFormProps) {
           </div>
 
           <div className="flex gap-3 pt-4">
-            <Button variant="outline" onClick={() => setStep(2)} disabled={isSubmitting}>
+            <Button
+              variant="outline"
+              onClick={() => setStep(2)}
+              disabled={isSubmitting || isMinting}
+            >
               Back
             </Button>
-            <Button onClick={handleSubmit} disabled={isSubmitting}>
+            <Button onClick={handleSubmit} disabled={isSubmitting || isMinting}>
               {isSubmitting ? 'Generating...' : 'Generate Claim Links'}
             </Button>
           </div>
+
+          {/* Token minting status indicator */}
+          {isMinting && (
+            <div className="mt-6 bg-blue-50 p-4 rounded-lg flex items-center gap-3 border border-blue-100 animate-pulse">
+              <Loader2 className="h-5 w-5 text-blue-600 animate-spin" />
+              <div>
+                <p className="text-blue-700 font-medium">{mintProgress}</p>
+                <p className="text-blue-600 text-sm">This may take a few moments...</p>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

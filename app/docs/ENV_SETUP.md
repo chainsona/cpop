@@ -16,7 +16,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY="your-supabase-anon-key"
 
 1. Create a Supabase project at [https://supabase.com](https://supabase.com)
 2. Get your project URL and anon key from the Supabase dashboard
-3. Create a storage bucket named "poap-images" in your Supabase project
+3. Create a storage bucket named "cpop" in your Supabase project
 4. Set up a PostgreSQL database and update the `DATABASE_URL` with your connection string
 5. Run `pnpm prisma migrate dev` to create the database tables
 

@@ -1,88 +1,101 @@
 'use client';
 
 import * as React from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import {
-  ArrowLeft,
-  Link as LinkIcon,
+  ChevronDown,
+  ChevronUp,
+  Link2 as LinkIcon,
   LockKeyhole,
   MapPin,
   Eye,
   Ban,
-  ChevronDown,
-  ChevronUp,
+  ArrowLeft,
 } from 'lucide-react';
+import { POAPTabNav } from '@/components/poap/poap-tab-nav';
+import { TokenStatusAlert } from '@/components/poap/token-status-alert';
+import { toast } from 'sonner';
+import { usePageTitle } from '@/contexts/page-title-context';
 import { MethodCard } from '@/components/poap/distribution/method-card';
 import { ClaimLinksForm } from '@/components/poap/distribution/claim-links-form';
 import { SecretWordForm } from '@/components/poap/distribution/secret-word-form';
 import { LocationBasedForm } from '@/components/poap/distribution/location-based-form';
-import { POAPTabNav } from '@/components/poap/poap-tab-nav';
-import { useEffect, useState } from 'react';
-import { toast } from 'sonner';
+import { AddMethodDialog } from '@/components/poap/distribution/add-method-dialog';
 
 // Types for the distribution methods
 interface DistributionMethod {
   id: string;
   type: 'ClaimLinks' | 'SecretWord' | 'LocationBased';
-  poapId: string;
   disabled: boolean;
+  settings: any;
   createdAt: string;
-  // Relations depending on the type
-  claimLinks?: ClaimLink[];
-  secretWord?: SecretWord;
-  locationBased?: LocationBased;
+  claimLinks?: Array<{
+    id: string;
+    token: string;
+    claimed: boolean;
+    claimedAt?: string | null;
+    expiresAt?: string | null;
+  }>;
+  secretWord?: {
+    word: string;
+    maxClaims: number | null;
+    claimCount: number;
+    startDate: string | null;
+    endDate: string | null;
+  };
+  locationBased?: {
+    city: string;
+    country: string | null;
+    latitude?: number | null;
+    longitude?: number | null;
+    radius?: number;
+    maxClaims: number | null;
+    claimCount: number;
+    startDate: string | null;
+    endDate: string | null;
+  };
 }
 
-interface ClaimLink {
+// Interface for POAP data
+interface Poap {
   id: string;
-  token: string;
-  claimed: boolean;
-  claimedAt: string | null;
-  expiresAt: string | null;
-}
-
-interface SecretWord {
-  id: string;
-  word: string;
-  maxClaims: number | null;
-  claimCount: number;
-  startDate: string | null;
-  endDate: string | null;
-}
-
-interface LocationBased {
-  id: string;
-  city: string;
-  country: string | null;
-  latitude: number | null;
-  longitude: number | null;
-  radius: number;
-  maxClaims: number | null;
-  claimCount: number;
-  startDate: string | null;
-  endDate: string | null;
+  title: string;
+  description: string;
+  imageUrl: string;
+  status: 'Draft' | 'Published' | 'Distributed' | 'Unclaimable';
+  token?: {
+    id: string;
+    mintAddress: string;
+    supply: number;
+    decimals: number;
+  } | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export default function POAPDistributionPage() {
   const pathname = usePathname();
   const id = pathname.split('/')[2]; // Extract ID from URL path: /poaps/[id]/distribution
-  
+  const { setPageTitle } = usePageTitle();
+
   const [selectedMethod, setSelectedMethod] = useState<string | null>(null);
   const [distributionMethods, setDistributionMethods] = useState<DistributionMethod[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [showDisabled, setShowDisabled] = useState(false);
+  const [poap, setPoap] = useState<Poap | null>(null);
+  const [tokenStatus, setTokenStatus] = useState({ minted: false, supply: 0 });
 
   // Split methods into active and disabled
   const activeMethods = distributionMethods.filter(method => !method.disabled);
   const disabledMethods = distributionMethods.filter(method => method.disabled);
 
-  // Fetch distribution methods from the database
   useEffect(() => {
-    const fetchDistributionMethods = async () => {
+    async function fetchDistributionMethods() {
       try {
         setIsLoading(true);
         const response = await fetch(`/api/poaps/${id}/distribution`);
@@ -93,25 +106,72 @@ export default function POAPDistributionPage() {
 
         const data = await response.json();
         setDistributionMethods(data.distributionMethods || []);
-      } catch (err) {
-        console.error('Error fetching distribution methods:', err);
-        setError('Failed to load distribution methods');
-        toast.error('Failed to load distribution methods');
+      } catch (error) {
+        setError(error instanceof Error ? error.message : 'An error occurred');
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    fetchDistributionMethods();
+  }, [id]);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setIsLoading(true);
+
+        // Fetch POAP details
+        const poapResponse = await fetch(`/api/poaps/${id}`);
+        if (!poapResponse.ok) {
+          if (poapResponse.status === 404) {
+            // Handle 404 by showing appropriate UI
+            setError('POAP not found');
+            return;
+          }
+          throw new Error('Failed to fetch POAP');
+        }
+
+        const poapData = await poapResponse.json();
+        setPoap(poapData.poap);
+
+        // Set token status
+        setTokenStatus({
+          minted: !!poapData.poap.token,
+          supply: poapData.poap.token?.supply || 0,
+        });
+
+        if (poapData.poap.title) {
+          setPageTitle(`${poapData.poap.title} - Distribution`);
+        }
+
+        // Fetch distribution methods
+        const methodsResponse = await fetch(`/api/poaps/${id}/distribution`);
+        if (!methodsResponse.ok) {
+          throw new Error('Failed to fetch distribution methods');
+        }
+
+        const methodsData = await methodsResponse.json();
+        setDistributionMethods(methodsData.distributionMethods || []);
+      } catch (err: any) {
+        console.error('Error fetching data:', err);
+        setError(err.message || 'An error occurred');
       } finally {
         setIsLoading(false);
       }
     };
 
-    fetchDistributionMethods();
-  }, [id]);
+    fetchData();
+
+    return () => {
+      setPageTitle('');
+    };
+  }, [id, setPageTitle]);
 
   // Function to toggle active/disabled state
   const toggleMethodStatus = async (methodId: string, currentDisabled: boolean) => {
-    if (isProcessing) return;
-
     try {
       setIsProcessing(true);
-      const action = currentDisabled ? 'enable' : 'disable';
 
       const response = await fetch(`/api/poaps/${id}/distribution/${methodId}`, {
         method: 'PATCH',
@@ -124,23 +184,19 @@ export default function POAPDistributionPage() {
       });
 
       if (!response.ok) {
-        throw new Error(`Failed to ${action} distribution method`);
+        throw new Error('Failed to update method status');
       }
 
       // Update the local state
-      setDistributionMethods(prev =>
-        prev.map(method =>
+      setDistributionMethods(prevMethods =>
+        prevMethods.map(method =>
           method.id === methodId ? { ...method, disabled: !currentDisabled } : method
         )
       );
 
-      toast.success(`Distribution method ${action}d successfully`);
-    } catch (err) {
-      console.error(
-        `Error ${currentDisabled ? 'enabling' : 'disabling'} distribution method:`,
-        err
-      );
-      toast.error(err instanceof Error ? err.message : 'Failed to update distribution method');
+      toast.success(`Method ${currentDisabled ? 'enabled' : 'disabled'} successfully`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to update method status');
     } finally {
       setIsProcessing(false);
     }
@@ -178,11 +234,16 @@ export default function POAPDistributionPage() {
           description: `Word: ${method.secretWord.word}, ${method.secretWord.claimCount} claims so far${method.secretWord.maxClaims ? ` (max: ${method.secretWord.maxClaims})` : ''}`,
         };
       case 'LocationBased':
-        if (!method.locationBased)
+        // Check if locationBased exists and has at least city property
+        if (!method.locationBased || !method.locationBased.city)
           return { title: 'Location Based', description: 'No details available' };
+        
+        // Get radius value with a fallback to 500 (default value)
+        const radius = method.locationBased.radius || 500;
+        
         return {
           title: 'Location Based',
-          description: `${method.locationBased.city}${method.locationBased.country ? `, ${method.locationBased.country}` : ''}, radius: ${method.locationBased.radius}m, ${method.locationBased.claimCount} claims`,
+          description: `${method.locationBased.city}${method.locationBased.country ? `, ${method.locationBased.country}` : ''}, radius: ${radius}m, ${method.locationBased.claimCount || 0} claims`,
         };
       default:
         return { title: 'Unknown Method', description: 'No details available' };
@@ -244,6 +305,31 @@ export default function POAPDistributionPage() {
     );
   };
 
+  const handleDistributionMethodAdded = async (newMethod: DistributionMethod) => {
+    setSelectedMethod(null);
+
+    // Refetch the distribution methods to include the new one
+    try {
+      const response = await fetch(`/api/poaps/${id}/distribution`);
+      if (response.ok) {
+        const data = await response.json();
+        setDistributionMethods(data.distributionMethods || []);
+      }
+
+      // Also update the POAP to get the latest token status
+      const poapResponse = await fetch(`/api/poaps/${id}`);
+      if (poapResponse.ok) {
+        const poapData = await poapResponse.json();
+        setTokenStatus({
+          minted: !!poapData.poap.token,
+          supply: poapData.poap.token?.supply || 0,
+        });
+      }
+    } catch (err: any) {
+      console.error('Error refreshing data:', err);
+    }
+  };
+
   return (
     <div className="container mx-auto py-10">
       <div className="max-w-4xl mx-auto">
@@ -275,6 +361,20 @@ export default function POAPDistributionPage() {
           </div>
         ) : (
           <>
+            {/* Show token status alert */}
+            <TokenStatusAlert 
+              tokenStatus={tokenStatus} 
+              poapId={id} 
+              hasDistributionMethods={activeMethods.length > 0}
+              onTokensMinted={(newSupply) => {
+                // Update the token status when tokens are minted
+                setTokenStatus({
+                  minted: true,
+                  supply: newSupply
+                });
+              }}
+            />
+
             {/* Active Distribution Methods */}
             {activeMethods.length > 0 && (
               <div className="mb-8 space-y-6">
@@ -367,6 +467,15 @@ export default function POAPDistributionPage() {
                   <LocationBasedForm id={id} onSuccess={() => setSelectedMethod(null)} />
                 )}
               </div>
+            )}
+
+            {/* Add method dialog */}
+            {selectedMethod === 'add' && (
+              <AddMethodDialog
+                poapId={id}
+                onClose={() => setSelectedMethod(null)}
+                onMethodAdded={handleDistributionMethodAdded}
+              />
             )}
           </>
         )}

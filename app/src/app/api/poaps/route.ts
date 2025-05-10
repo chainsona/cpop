@@ -3,6 +3,9 @@ import { z } from 'zod';
 import { prisma } from '@/lib/db';
 import { poapFormSchema } from '@/lib/validations';
 import { startOfDay, endOfDay } from 'date-fns';
+import { getServerSession } from 'next-auth/next';
+import { authOptions } from '@/lib/auth';
+import { apiMiddleware } from '../middleware';
 
 async function validateImageUrl(imageUrl: string): Promise<boolean> {
   try {
@@ -39,90 +42,88 @@ function isBase64ImageTooLarge(base64String: string, maxSizeInMB: number = 2): b
   return sizeInMB > maxSizeInMB;
 }
 
-export async function POST(req: NextRequest) {
+// POST handler to create a new POAP
+async function postHandler(req: NextRequest) {
   try {
+    // Get user from session for creator assignment
+    const session = await getServerSession(authOptions);
+    const userId = session?.user?.id;
+    
+    // For wallet-based auth, get wallet from request
+    const walletAddress = (req as any).wallet?.address;
+    
+    // If neither session nor wallet, return unauthorized
+    if (!userId && !walletAddress) {
+      return NextResponse.json(
+        { error: 'Unauthorized: Please connect your wallet or sign in' },
+        { status: 401 }
+      );
+    }
+    
+    // Parse and validate the request body
     const body = await req.json();
 
-    // Validate the request body using zod schema
-    const validatedData = poapFormSchema.parse(body);
+    // Create a user if not exists - in case of wallet auth only
+    let creatorId = userId;
+    if (!creatorId && walletAddress) {
+      const user = await prisma.user.findUnique({
+        where: { walletAddress },
+      });
 
-    // Check if we're dealing with a base64 image
-    const isBase64Image = validatedData.imageUrl.startsWith('data:image/');
-
-    if (isBase64Image) {
-      // Validate base64 image size to prevent database issues
-      if (isBase64ImageTooLarge(validatedData.imageUrl)) {
-        return NextResponse.json(
-          {
-            error:
-              'The uploaded image is too large. Maximum size is 2MB. Please use a smaller image or provide a URL instead.',
+      if (user) {
+        creatorId = user.id;
+      } else {
+        // Create a new user with the wallet address
+        const newUser = await prisma.user.create({
+          data: {
+            walletAddress,
+            name: `User ${walletAddress.slice(0, 4)}...${walletAddress.slice(-4)}`,
           },
-          { status: 400 }
-        );
+        });
+        creatorId = newUser.id;
       }
-    } else {
-      // Only validate external URLs
-      const isValidImageUrl = await validateImageUrl(validatedData.imageUrl);
-      if (!isValidImageUrl) {
+    }
+
+    try {
+      // Validate against our schema first
+      const validatedData = poapFormSchema.parse(body);
+
+      // Check if the image URL is valid
+      const isImageValid = await validateImageUrl(validatedData.imageUrl);
+      if (!isImageValid) {
         return NextResponse.json(
-          { error: 'The provided image URL is not valid or is not accessible.' },
+          { error: 'Invalid image URL: Unable to verify image' },
           { status: 400 }
         );
       }
-    }
 
-    // Process dates - start date is beginning of day, end date is end of day
-    const startDate = validatedData.startDate ? startOfDay(validatedData.startDate) : undefined;
-    const endDate = validatedData.endDate ? endOfDay(validatedData.endDate) : undefined;
-
-    if (!startDate || !endDate) {
-      return NextResponse.json({ error: 'Start date and end date are required' }, { status: 400 });
-    }
-
-    // Create a new POAP in the database
+      // Create the new POAP in the database with creator info
     const poap = await prisma.poap.create({
       data: {
-        title: validatedData.title,
-        description: validatedData.description,
-        imageUrl: validatedData.imageUrl,
-        website: validatedData.website || null,
-        startDate,
-        endDate,
-        attendees: validatedData.attendees || null,
-        status: 'Draft',
+          ...validatedData,
+          creatorId, // Associate POAP with the creator
       },
     });
 
-    return NextResponse.json(
-      {
+      return NextResponse.json({
         success: true,
         message: 'POAP created successfully',
         poap,
+      });
+    } catch (validationError) {
+      if (validationError instanceof z.ZodError) {
+        return NextResponse.json(
+          {
+            error: 'Validation error',
+            details: validationError.errors,
       },
-      { status: 201 }
+          { status: 400 }
     );
+      }
+      throw validationError;
+    }
   } catch (error) {
     console.error('Error creating POAP:', error);
-
-    if (error instanceof z.ZodError) {
-      // Extract field errors in a safer way
-      const fieldErrors: Record<string, string> = {};
-      for (const issue of error.errors) {
-        if (issue.path.length > 0) {
-          const fieldName = issue.path[0].toString();
-          fieldErrors[fieldName] = issue.message;
-        }
-      }
-
-      return NextResponse.json(
-        {
-          error: 'Invalid request data',
-          fieldErrors,
-          message: 'Please check the form fields and try again',
-        },
-        { status: 400 }
-      );
-    }
 
     return NextResponse.json(
       {
@@ -134,11 +135,79 @@ export async function POST(req: NextRequest) {
   }
 }
 
-export async function GET() {
+// GET handler to fetch POAPs
+async function getHandler(req: NextRequest) {
   try {
+    // Get user from session for filtering
+    const session = await getServerSession(authOptions);
+    const userId = session?.user?.id;
+    
+    // For wallet-based auth, get wallet from request
+    const walletAddress = (req as any).wallet?.address;
+    
+    // Build the query based on authentication
+    const where: any = {};
+    
+    if (userId) {
+      // If authenticated with NextAuth, filter by creator ID
+      where.creatorId = userId;
+    } else if (walletAddress) {
+      // If authenticated with wallet, find the user by wallet address
+      const user = await prisma.user.findUnique({
+        where: { walletAddress },
+      });
+      
+      if (user) {
+        where.creatorId = user.id;
+      } else {
+        // If no user found with this wallet, return empty list
+        return NextResponse.json({ poaps: [] });
+      }
+    } else {
+      // If not authenticated, only show public POAPs
+      where.settings = {
+        visibility: 'Public',
+      };
+    }
+    
+    // Fetch POAPs with the constructed filter but without including creator directly
     const poaps = await prisma.poap.findMany({
+      where,
       orderBy: { createdAt: 'desc' },
     });
+
+    // If we have poaps and need creator information, fetch it separately
+    if (poaps.length > 0) {
+      const creatorIds = poaps
+        .map(poap => poap.creatorId)
+        .filter(Boolean) as string[];
+      
+      if (creatorIds.length > 0) {
+        const creators = await prisma.user.findMany({
+          where: {
+            id: {
+              in: creatorIds
+            }
+          },
+          select: {
+            id: true,
+            name: true,
+            walletAddress: true,
+          }
+        });
+        
+        // Map creators to poaps
+        const creatorMap = new Map(creators.map(creator => [creator.id, creator]));
+        
+        // Attach creator info to each poap
+        const poapsWithCreators = poaps.map(poap => ({
+          ...poap,
+          creator: poap.creatorId ? creatorMap.get(poap.creatorId) || null : null
+        }));
+        
+        return NextResponse.json({ poaps: poapsWithCreators });
+      }
+    }
 
     return NextResponse.json({ poaps });
   } catch (error) {
@@ -147,3 +216,7 @@ export async function GET() {
     return NextResponse.json({ error: 'Failed to fetch POAPs' }, { status: 500 });
   }
 }
+
+// Export wrapped handlers with auth middleware
+export const POST = (req: NextRequest) => apiMiddleware(req, postHandler);
+export const GET = (req: NextRequest) => apiMiddleware(req, getHandler);

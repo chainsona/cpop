@@ -4,6 +4,8 @@ import './globals.css';
 import { Toaster } from 'sonner';
 import { Header } from '@/components/layout/header';
 import { PageTitleProvider } from '@/contexts/page-title-context';
+import { SolanaWalletProvider } from '@/contexts/wallet-context';
+import { NavigationProvider } from '@/components/layout/navigation-context';
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -30,17 +32,15 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased min-h-screen bg-neutral-50`}
       >
-        <PageTitleProvider>
-          <Header />
-          <main className="pt-4">{children}</main>
-        </PageTitleProvider>
-        <Toaster 
-          position="top-right" 
-          closeButton
-          richColors
-          expand
-          theme="light"
-        />
+        <NavigationProvider>
+          <SolanaWalletProvider>
+            <PageTitleProvider>
+              <Header />
+              <main className="pt-4">{children}</main>
+            </PageTitleProvider>
+            <Toaster position="bottom-right" closeButton richColors expand theme="light" />
+          </SolanaWalletProvider>
+        </NavigationProvider>
       </body>
     </html>
   );

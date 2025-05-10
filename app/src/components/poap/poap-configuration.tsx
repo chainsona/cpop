@@ -176,6 +176,7 @@ export function POAPConfiguration({ className }: POAPConfigurationProps) {
                     <LocationPicker
                       onSelectLocation={location => setSelectedLocation(location)}
                       className="mt-1"
+                      initialLocation={selectedLocation}
                     />
                   </div>
                   <div>
@@ -244,6 +245,7 @@ export function POAPConfiguration({ className }: POAPConfigurationProps) {
                       <LocationPicker
                         onSelectLocation={location => setSelectedLocation(location)}
                         className="mt-1"
+                        initialLocation={selectedLocation}
                       />
                     </div>
                   ) : (

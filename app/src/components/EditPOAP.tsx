@@ -113,8 +113,8 @@ export function EditPOAP({ id }: EditPOAPProps) {
       mode="edit"
       initialData={poapData}
       onSuccess={data => {
-        // You can customize success behavior here
-        window.location.href = '/poaps';
+        // Redirect to the POAP details page
+        window.location.href = `/poaps/${id}`;
       }}
     />
   );

@@ -31,6 +31,7 @@ export default function POAPSettingsPage() {
   const [startDate, setStartDate] = React.useState<Date | undefined>(undefined);
   const [endDate, setEndDate] = React.useState<Date | undefined>(undefined);
   const [includeTime, setIncludeTime] = React.useState<boolean>(false);
+  const [datesPrefilled, setDatesPrefilled] = React.useState<boolean>(false);
 
   // Visibility settings
   const [visibility, setVisibility] = React.useState<string>('public');
@@ -41,32 +42,55 @@ export default function POAPSettingsPage() {
 
   // Fetch existing settings data
   React.useEffect(() => {
-    const fetchSettings = async () => {
+    const fetchPoapAndSettings = async () => {
       try {
         setIsLoading(true);
         setError(null);
         
-        const response = await fetch(`/api/poaps/${id}/settings`);
+        // First fetch the POAP data to get start/end dates
+        const poapResponse = await fetch(`/api/poaps/${id}`);
         
-        if (!response.ok) {
-          // If 404, it just means no settings yet, which is fine
-          if (response.status !== 404) {
-            throw new Error(`Failed to fetch settings: ${response.statusText}`);
+        if (poapResponse.ok) {
+          const poapData = await poapResponse.json();
+          
+          if (poapData.poap) {
+            // Only set the dates if settings haven't been loaded yet
+            if (poapData.poap.startDate) {
+              setStartDate(new Date(poapData.poap.startDate));
+              setDatesPrefilled(true);
+            }
+            
+            if (poapData.poap.endDate) {
+              setEndDate(new Date(poapData.poap.endDate));
+              setDatesPrefilled(true);
+            }
           }
-          // Just return without setting any values
+        }
+        
+        // Then fetch settings (which will override POAP dates if settings exist)
+        const settingsResponse = await fetch(`/api/poaps/${id}/settings`);
+        
+        if (!settingsResponse.ok) {
+          // If 404, it just means no settings yet, which is fine
+          if (settingsResponse.status !== 404) {
+            throw new Error(`Failed to fetch settings: ${settingsResponse.statusText}`);
+          }
+          // Just return without setting any values from settings
           return;
         }
         
-        const data = await response.json();
+        const data = await settingsResponse.json();
         
         if (data.settings) {
-          // Set dates
+          // Set dates from settings (these take precedence over POAP dates)
           if (data.settings.defaultStartDate) {
             setStartDate(new Date(data.settings.defaultStartDate));
+            setDatesPrefilled(false); // No longer considered prefilled from POAP
           }
           
           if (data.settings.defaultEndDate) {
             setEndDate(new Date(data.settings.defaultEndDate));
+            setDatesPrefilled(false); // No longer considered prefilled from POAP
           }
           
           // Set other settings
@@ -76,7 +100,7 @@ export default function POAPSettingsPage() {
           setNotifyOnClaim(data.settings.notifyOnClaim);
         }
       } catch (err) {
-        console.error('Error fetching settings:', err);
+        console.error('Error fetching POAP or settings:', err);
         setError(err instanceof Error ? err.message : 'An unknown error occurred');
       } finally {
         setIsLoading(false);
@@ -84,7 +108,7 @@ export default function POAPSettingsPage() {
     };
     
     if (id) {
-      fetchSettings();
+      fetchPoapAndSettings();
     }
   }, [id]);
 
@@ -231,6 +255,12 @@ export default function POAPSettingsPage() {
                 Set the time window during which this POAP can be claimed. If no dates are set, the
                 POAP can be claimed at any time.
               </p>
+
+              {datesPrefilled && (
+                <div className="bg-blue-50 p-3 rounded-md mb-2 text-sm text-blue-700">
+                  These dates are pre-filled from the POAP's event dates. You can modify them if needed.
+                </div>
+              )}
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>

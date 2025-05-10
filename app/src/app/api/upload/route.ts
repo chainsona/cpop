@@ -17,7 +17,7 @@ const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
   },
 });
 
-const STORAGE_BUCKET = 'poap-images';
+const STORAGE_BUCKET = 'cpop';
 
 export async function POST(request: NextRequest) {
   try {

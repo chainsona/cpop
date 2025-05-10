@@ -31,7 +31,7 @@ Before using the application, ensure you have a storage bucket set up in Supabas
 
 1. Go to your Supabase project dashboard
 2. Navigate to Storage
-3. Create a new bucket named `poap-images`
+3. Create a new bucket named `cpop`
 4. Set the bucket's privacy settings to allow public access to files
 
 ## Development
@@ -100,3 +100,60 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+# POAP Distribution Platform
+
+This application allows for the creation and distribution of POAPs (Proof of Attendance Protocol) using Solana compressed tokens.
+
+## Features
+
+- Create and manage POAP events
+- Set up different distribution methods
+- Automatic compressed token minting with Token-2022 standard
+- Metadata-enabled tokens for rich POAP experiences
+
+## Token Minting Process
+
+The platform automatically manages token minting when distribution methods are created:
+
+1. **First Distribution Method**: When the first distribution method is created for a POAP, the system automatically mints compressed tokens using the ZK Compression protocol and Token-2022 standard. The amount of tokens minted matches the quantity specified in the distribution method.
+
+2. **Additional Distribution Methods**: When additional distribution methods are added to a POAP, the system increases the token supply by minting more tokens equal to the amount specified in the new distribution method.
+
+This automatic process ensures that each POAP has exactly the right number of tokens available for distribution.
+
+## Setup
+
+### Environment Variables
+
+Required environment variables for Solana integration:
+
+```
+# Solana
+SOLANA_RPC_ENDPOINT="https://api.mainnet-beta.solana.com"
+# Base64 encoded wallet secret key for token minting, as a JSON array
+SOLANA_WALLET_SECRET="[]"
+```
+
+The `SOLANA_WALLET_SECRET` should be a base64 encoded array of the wallet's secret key. This wallet will be used for minting tokens and must have sufficient SOL to pay for transactions.
+
+### Installation
+
+```bash
+# Install dependencies
+pnpm install
+
+# Run database migrations
+pnpm prisma migrate dev
+
+# Start the development server
+pnpm dev
+```
+
+## Technologies Used
+
+- Next.js with App Router
+- Prisma ORM with PostgreSQL
+- Solana blockchain and SPL tokens
+- ZK Compression for efficient token storage
+- Token-2022 standard for rich metadata

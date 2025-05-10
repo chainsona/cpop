@@ -30,6 +30,7 @@ import {
   Cell,
 } from 'recharts';
 import { toast } from 'sonner';
+import { ExportDataButton } from '@/components/analytics/export-data-button';
 
 // Define the analytics data interface
 interface AnalyticsData {
@@ -254,10 +255,13 @@ export default function POAPAnalyticsPage() {
           <h2 className="text-2xl font-bold">Analytics</h2>
 
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" className="gap-1.5">
-              <Download className="h-4 w-4" />
-              Export Data
-            </Button>
+            {analyticsData && (
+              <ExportDataButton 
+                data={analyticsData} 
+                filename={`poap-${id}-analytics`} 
+                defaultFormat="json" 
+              />
+            )}
             <Button
               variant="outline"
               size="sm"

@@ -15,7 +15,8 @@ export function POAPTabNav({ poapId }: POAPTabNavProps) {
   const tabs = [
     { label: 'Overview', href: `/poaps/${poapId}`, exact: true },
     { label: 'Distribution', href: `/poaps/${poapId}/distribution` },
-    { label: 'Attributes', href: `/poaps/${poapId}/attributes` },
+    { label: 'Token', href: `/poaps/${poapId}/token` },
+    { label: 'Metadata', href: `/poaps/${poapId}/attributes` },
     { label: 'Settings', href: `/poaps/${poapId}/settings` },
     { label: 'Analytics', href: `/poaps/${poapId}/analytics` },
   ];

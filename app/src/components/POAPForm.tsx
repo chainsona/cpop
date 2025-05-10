@@ -19,13 +19,6 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { DatePicker } from '@/components/ui/date-picker';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 
 interface POAPFormProps {
   mode: 'create' | 'edit';
@@ -38,7 +31,6 @@ interface POAPFormProps {
     startDate?: Date;
     endDate?: Date;
     supply?: number;
-    status?: 'Draft' | 'Published' | 'Distributed';
     attendees?: number;
   };
   onSuccess?: (data: any) => void;
@@ -53,7 +45,6 @@ type FormValues = {
   endDate?: Date;
   attendees?: number;
   website?: string;
-  status?: 'Draft' | 'Published' | 'Distributed';
 };
 
 export function POAPForm({ mode = 'create', initialData, onSuccess }: POAPFormProps) {
@@ -77,7 +68,6 @@ export function POAPForm({ mode = 'create', initialData, onSuccess }: POAPFormPr
       startDate: initialData?.startDate ? new Date(initialData.startDate) : undefined,
       endDate: initialData?.endDate ? new Date(initialData.endDate) : undefined,
       attendees: initialData?.attendees,
-      status: initialData?.status || 'Draft',
     },
   });
 
@@ -230,6 +220,8 @@ export function POAPForm({ mode = 'create', initialData, onSuccess }: POAPFormPr
 
       const method = mode === 'create' ? 'POST' : 'PUT';
 
+      console.log(`Making ${method} request to ${endpoint}`);
+
       // Submit the form data to the API
       const response = await fetch(endpoint, {
         method,
@@ -241,17 +233,62 @@ export function POAPForm({ mode = 'create', initialData, onSuccess }: POAPFormPr
 
       const responseData = await response.json();
 
+      console.log('API response:', responseData);
+
       if (!response.ok) {
         console.error('API response error:', responseData);
         throw new Error(responseData.error || responseData.message || 'Failed to process POAP');
+      }
+
+      // If we're editing and the update was successful, check if we need to update token metadata
+      if (mode === 'edit' && initialData?.id) {
+        const hasMetadataChanges =
+          data.title !== initialData.title ||
+          data.description !== initialData.description ||
+          data.imageUrl !== initialData.imageUrl;
+
+        if (hasMetadataChanges) {
+          // Display banner on the next page informing the user to update metadata
+          localStorage.setItem(`poap-${initialData.id}-metadata-outdated`, 'true');
+        }
       }
 
       // Handle success
       if (onSuccess) {
         onSuccess(responseData);
       } else {
-        // Default redirect to POAPs list
-        window.location.href = '/poaps';
+        // Log the current mode and ID for debugging
+        console.log('Form submission success:', {
+          mode,
+          poapId: initialData?.id,
+          responseData,
+        });
+
+        // Get the ID from different sources
+        const poapId = initialData?.id || responseData.poap?.id || responseData.id;
+
+        if (poapId) {
+          // Force a page navigation with slight delay to ensure state updates complete
+          console.log(`Will redirect to: /poaps/${poapId}`);
+
+          // Use a forced approach with setTimeout to ensure redirect happens
+          setTimeout(() => {
+            const redirectUrl = `/poaps/${poapId}`;
+            console.log(`Executing redirect to: ${redirectUrl}`);
+
+            // Try direct assignment first
+            window.location.href = redirectUrl;
+
+            // If that doesn't work, try replace
+            setTimeout(() => {
+              console.log('Trying location.replace as fallback');
+              window.location.replace(redirectUrl);
+            }, 100);
+          }, 100);
+        } else {
+          console.log('No POAP ID found, redirecting to /poaps');
+          window.location.href = '/poaps';
+        }
       }
     } catch (error) {
       console.error(`Error ${mode === 'create' ? 'creating' : 'updating'} POAP:`, error);
@@ -568,29 +605,6 @@ export function POAPForm({ mode = 'create', initialData, onSuccess }: POAPFormPr
                   value={field.value || ''}
                 />
               </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <FormField
-          control={form.control}
-          name="status"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Status</FormLabel>
-              <Select disabled={isSubmitting} value={field.value} onValueChange={field.onChange}>
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select status" />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  <SelectItem value="Draft">Draft</SelectItem>
-                  <SelectItem value="Published">Published</SelectItem>
-                  <SelectItem value="Distributed">Distributed</SelectItem>
-                </SelectContent>
-              </Select>
               <FormMessage />
             </FormItem>
           )}

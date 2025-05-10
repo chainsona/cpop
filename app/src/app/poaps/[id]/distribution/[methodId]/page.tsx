@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Copy, Eye, Ban, Trash2 } from 'lucide-react';
+import { ArrowLeft, Copy, Eye, Ban, Trash2, EyeOff } from 'lucide-react';
 import { POAPTabNav } from '@/components/poap/poap-tab-nav';
 import { toast } from 'sonner';
 import {
@@ -27,6 +27,7 @@ import {
 } from '@/components/ui/dialog';
 import QRCode from 'react-qr-code';
 import { formatDistance } from 'date-fns';
+import { SecretWordDisplay } from '@/components/poap/distribution/secret-word-display';
 
 // Types for the distribution methods
 interface DistributionMethod {
@@ -349,7 +350,9 @@ export default function DistributionMethodDetailsPage() {
                       <>
                         <div className="grid grid-cols-3 gap-4">
                           <dt className="font-medium text-neutral-600">Word:</dt>
-                          <dd className="col-span-2">{method.secretWord.word}</dd>
+                          <dd className="col-span-2">
+                            <SecretWordDisplay word={method.secretWord.word} />
+                          </dd>
                         </div>
                         <div className="grid grid-cols-3 gap-4">
                           <dt className="font-medium text-neutral-600">Claims:</dt>

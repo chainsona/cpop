@@ -3,6 +3,13 @@ import { z } from 'zod';
 import { prisma } from '@/lib/db';
 import { poapFormSchema } from '@/lib/validations';
 import { startOfDay, endOfDay } from 'date-fns';
+import { getServerSession } from 'next-auth/next';
+import { authOptions } from '@/lib/auth';
+import { apiMiddleware } from '../../middleware';
+
+interface Params {
+  id: string;
+}
 
 // Common function to validate image URLs
 async function validateImageUrl(imageUrl: string): Promise<boolean> {
@@ -28,23 +35,123 @@ async function validateImageUrl(imageUrl: string): Promise<boolean> {
   }
 }
 
-type Params = Promise<{ id: string }>;
+// Helper to check user authorization for a POAP
+async function checkUserAuthorization(
+  req: NextRequest,
+  poapId: string
+): Promise<{ authorized: boolean; creatorId?: string }> {
+  // Get user from session
+  const session = await getServerSession(authOptions);
+  const userId = session?.user?.id;
+
+  // For wallet-based auth, get wallet from request
+  const walletAddress = (req as any).wallet?.address;
+
+  // If neither session nor wallet, user is not authorized
+  if (!userId && !walletAddress) {
+    return { authorized: false };
+  }
+
+  // First, fetch the POAP with its creator
+  const poap = await prisma.poap.findUnique({
+    where: { id: poapId },
+    select: { creatorId: true, settings: { select: { visibility: true } } },
+  });
+
+  if (!poap) {
+    return { authorized: false };
+  }
+
+  // If the POAP is public, anyone can view it
+  if (poap.settings?.visibility === 'Public') {
+    return { authorized: true, creatorId: poap.creatorId || undefined };
+  }
+
+  // If user ID from session matches creator ID, they're authorized
+  if (userId && poap.creatorId === userId) {
+    return { authorized: true, creatorId: userId };
+  }
+
+  // If using wallet auth, check if walletAddress matches a user that is the creator
+  if (walletAddress) {
+    const user = await prisma.user.findUnique({
+      where: { walletAddress },
+    });
+
+    if (user && poap.creatorId === user.id) {
+      return { authorized: true, creatorId: user.id };
+    }
+  }
+
+  // No conditions for authorization were met
+  return { authorized: false };
+}
 
 // Get a single POAP by ID
-export async function GET(req: NextRequest, context: { params: Params }) {
+async function getHandler(req: NextRequest, context: { params: Params }) {
   try {
     const { id } = await context.params;
 
-    // Find the POAP in the database
+    // Fetch POAP from database
     const poap = await prisma.poap.findUnique({
-      where: { id },
+      where: { id: id },
+      include: {
+        settings: true,
+        attributes: {
+          include: {
+            artists: true,
+            organization: true,
+          },
+        },
+        tokens: true, // Include token information
+      },
     });
 
     if (!poap) {
       return NextResponse.json({ error: 'POAP not found' }, { status: 404 });
     }
 
-    return NextResponse.json({ poap });
+    // Check if user is authorized to view this POAP
+    const { authorized } = await checkUserAuthorization(req, id);
+
+    // If POAP is not public and user is not authorized, deny access
+    if (!authorized && poap.settings?.visibility !== 'Public') {
+      return NextResponse.json(
+        { error: 'You do not have permission to view this POAP' },
+        { status: 403 }
+      );
+    }
+
+    // If the POAP has a creator, fetch the creator data separately
+    let creator = null;
+    if (poap.creatorId) {
+      creator = await prisma.user.findUnique({
+        where: { id: poap.creatorId },
+        select: {
+          id: true,
+          name: true,
+          walletAddress: true,
+        },
+      });
+    }
+
+    // Find the token if it exists
+    const token = poap.tokens.length > 0 ? poap.tokens[0] : null;
+
+    // Create a clean response
+    const cleanedPoap = {
+      ...poap,
+      token: token, // Add the token as a single object instead of an array
+      tokens: undefined, // Remove the tokens array
+    };
+
+    // Add creator to the response
+    const poapWithCreator = {
+      ...cleanedPoap,
+      creator,
+    };
+
+    return NextResponse.json({ poap: poapWithCreator });
   } catch (error) {
     console.error('Error fetching POAP:', error);
 
@@ -59,10 +166,19 @@ export async function GET(req: NextRequest, context: { params: Params }) {
 }
 
 // Update a POAP by ID
-export async function PUT(req: NextRequest, context: { params: Params }) {
+async function putHandler(req: NextRequest, context: { params: Params }) {
   try {
     const { id } = await context.params;
-    const body = await req.json();
+
+    // Check authorization
+    const { authorized } = await checkUserAuthorization(req, id);
+
+    if (!authorized) {
+      return NextResponse.json(
+        { error: 'Unauthorized: You do not have permission to update this POAP' },
+        { status: 403 }
+      );
+    }
 
     // Find the POAP to make sure it exists
     const existingPoap = await prisma.poap.findUnique({
@@ -73,75 +189,49 @@ export async function PUT(req: NextRequest, context: { params: Params }) {
       return NextResponse.json({ error: 'POAP not found' }, { status: 404 });
     }
 
-    // Validate the request body using zod schema
-    const validatedData = poapFormSchema.parse(body);
+    // Parse the request body
+    const body = await req.json();
 
-    // Check if the image URL has changed
-    if (validatedData.imageUrl !== existingPoap.imageUrl) {
-      // Validate the new image URL if it's not a base64 image
-      if (!validatedData.imageUrl.startsWith('data:image/')) {
-        const isValidImageUrl = await validateImageUrl(validatedData.imageUrl);
-        if (!isValidImageUrl) {
+    try {
+      // Validate against our schema
+      const validatedData = poapFormSchema.parse(body);
+
+      // Check if the image URL is valid if it changed
+      if (validatedData.imageUrl !== existingPoap.imageUrl) {
+        const isImageValid = await validateImageUrl(validatedData.imageUrl);
+        if (!isImageValid) {
           return NextResponse.json(
-            {
-              error: 'The provided image URL is not valid or is not accessible.',
-            },
+            { error: 'Invalid image URL: Unable to verify image' },
             { status: 400 }
           );
         }
       }
+
+      // Update the POAP
+      const updatedPoap = await prisma.poap.update({
+        where: { id },
+        data: validatedData,
+      });
+
+      return NextResponse.json({
+        success: true,
+        message: 'POAP updated successfully',
+        poap: updatedPoap,
+      });
+    } catch (validationError) {
+      if (validationError instanceof z.ZodError) {
+        return NextResponse.json(
+          {
+            error: 'Validation error',
+            details: validationError.errors,
+          },
+          { status: 400 }
+        );
+      }
+      throw validationError;
     }
-
-    // Process dates
-    const startDate = validatedData.startDate ? startOfDay(validatedData.startDate) : undefined;
-    const endDate = validatedData.endDate ? endOfDay(validatedData.endDate) : undefined;
-
-    if (!startDate || !endDate) {
-      return NextResponse.json({ error: 'Start date and end date are required' }, { status: 400 });
-    }
-
-    // Update the POAP in the database
-    const updatedPoap = await prisma.poap.update({
-      where: { id },
-      data: {
-        title: validatedData.title,
-        description: validatedData.description,
-        imageUrl: validatedData.imageUrl,
-        website: validatedData.website || null,
-        startDate,
-        endDate,
-        attendees: validatedData.attendees || null,
-        status: existingPoap.status,
-      },
-    });
-
-    return NextResponse.json({
-      success: true,
-      message: 'POAP updated successfully',
-      poap: updatedPoap,
-    });
   } catch (error) {
     console.error('Error updating POAP:', error);
-
-    if (error instanceof z.ZodError) {
-      // Extract field errors in a safer way
-      const fieldErrors: Record<string, string> = {};
-      for (const issue of error.errors) {
-        if (issue.path.length > 0) {
-          const fieldName = issue.path[0].toString();
-          fieldErrors[fieldName] = issue.message;
-        }
-      }
-
-      return NextResponse.json(
-        {
-          error: 'Invalid request data',
-          fieldErrors,
-          message: 'Please check the form fields and try again',
-        },
-        { status: 400 }
-      );
-    }
 
     return NextResponse.json(
       {
@@ -154,9 +244,19 @@ export async function PUT(req: NextRequest, context: { params: Params }) {
 }
 
 // Delete a POAP by ID
-export async function DELETE(req: NextRequest, context: { params: Params }) {
+async function deleteHandler(req: NextRequest, context: { params: Params }) {
   try {
     const { id } = await context.params;
+
+    // Check authorization
+    const { authorized } = await checkUserAuthorization(req, id);
+
+    if (!authorized) {
+      return NextResponse.json(
+        { error: 'Unauthorized: You do not have permission to delete this POAP' },
+        { status: 403 }
+      );
+    }
 
     // Find the POAP to make sure it exists
     const existingPoap = await prisma.poap.findUnique({
@@ -188,3 +288,13 @@ export async function DELETE(req: NextRequest, context: { params: Params }) {
     );
   }
 }
+
+// Export wrapped handlers with auth middleware
+export const GET = (req: NextRequest, ctx: { params: Params }) =>
+  apiMiddleware(req, async () => getHandler(req, ctx));
+
+export const PUT = (req: NextRequest, ctx: { params: Params }) =>
+  apiMiddleware(req, async () => putHandler(req, ctx));
+
+export const DELETE = (req: NextRequest, ctx: { params: Params }) =>
+  apiMiddleware(req, async () => deleteHandler(req, ctx));

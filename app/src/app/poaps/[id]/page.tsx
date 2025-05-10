@@ -15,12 +15,15 @@ import {
   Users,
   User,
   Settings,
-  AlertTriangle
+  AlertTriangle,
+  Coins,
+  Building,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { InteractiveExternalLink } from '@/components/ui/interactive-link';
 import { ConfigStatusCard } from '@/components/poap/config-status-card';
 import { POAPTabNav } from '@/components/poap/poap-tab-nav';
+import { TokenStatusAlert } from '@/components/poap/token-status-alert';
 import { useEffect, useState } from 'react';
 import { usePageTitle } from '@/contexts/page-title-context';
 import { usePathname } from 'next/navigation';
@@ -37,6 +40,15 @@ interface POAP {
   status: 'Draft' | 'Published' | 'Distributed' | 'Unclaimable';
   createdAt: Date;
   updatedAt: Date;
+  token?: {
+    id: string;
+    mintAddress: string;
+    supply: number;
+    decimals: number;
+    metadataUri?: string;
+    metadataUpdatedAt?: Date;
+    updatedAt?: Date;
+  } | null;
 }
 
 // Simple StatusBadge component
@@ -128,26 +140,79 @@ function getStatusDisplay(status: 'Draft' | 'Published' | 'Distributed' | 'Uncla
   }
 }
 
+// Token warning component for POAPs without minted tokens
+function TokenWarning({ poapId }: { poapId: string }) {
+  return (
+    <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 flex gap-3 items-start mb-6">
+      <AlertTriangle className="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" />
+      <div className="flex-1">
+        <h3 className="font-medium text-amber-800 mb-1">No tokens minted yet</h3>
+        <p className="text-amber-700 text-sm mb-3">
+          This POAP doesn't have any compressed tokens minted yet. Start by creating a distribution
+          method to automatically mint tokens for your participants.
+        </p>
+        <Link href={`/poaps/${poapId}/distribution`}>
+          <Button size="sm" variant="outline" className="bg-white gap-1.5">
+            <Coins className="h-4 w-4" />
+            Create Distribution Method
+          </Button>
+        </Link>
+      </div>
+    </div>
+  );
+}
+
 export default function POAPDetailPage() {
   const pathname = usePathname();
   const id = pathname.split('/')[2]; // Extract ID from URL path: /poaps/[id]
-  
+
   const { setPageTitle } = usePageTitle();
   const [poap, setPoap] = useState<POAP | null>(null);
   const [distributionStatus, setDistributionStatus] = useState<
     'complete' | 'incomplete' | 'partial'
   >('incomplete');
   const [distributionSummary, setDistributionSummary] = useState('No claim methods configured');
-  const [attributesStatus, setAttributesStatus] = useState<
-    'complete' | 'incomplete' | 'partial'
-  >('incomplete');
+  const [attributesStatus, setAttributesStatus] = useState<'complete' | 'incomplete' | 'partial'>(
+    'incomplete'
+  );
   const [attributesSummary, setAttributesSummary] = useState('No attributes configured');
-  const [settingsStatus, setSettingsStatus] = useState<
-    'complete' | 'incomplete' | 'partial'
-  >('incomplete');
+  const [settingsStatus, setSettingsStatus] = useState<'complete' | 'incomplete' | 'partial'>(
+    'incomplete'
+  );
   const [settingsSummary, setSettingsSummary] = useState('Default settings');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [activeDistributionMethods, setActiveDistributionMethods] = useState<number>(0);
+  const [artists, setArtists] = useState<Array<{ name: string; url: string }>>([]);
+  const [organization, setOrganization] = useState<{ name: string; url: string } | null>(null);
+  const [metadataOutdated, setMetadataOutdated] = useState(false);
+
+  // Check for metadata outdated flag in localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const isOutdated = localStorage.getItem(`poap-${id}-metadata-outdated`) === 'true';
+      if (isOutdated) {
+        setMetadataOutdated(true);
+      }
+    }
+  }, [id]);
+
+  // Clear metadata outdated flag when component unmounts
+  useEffect(() => {
+    return () => {
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem(`poap-${id}-metadata-outdated`);
+      }
+    };
+  }, [id]);
+
+  // Function to handle metadata update
+  const handleMetadataUpdated = () => {
+    setMetadataOutdated(false);
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem(`poap-${id}-metadata-outdated`);
+    }
+  };
 
   // Fetch POAP data
   useEffect(() => {
@@ -179,6 +244,9 @@ export default function POAPDetailPage() {
           const methods = data.distributionMethods || [];
           const activeMethods = methods.filter((method: any) => !method.disabled);
 
+          // Set active distribution methods count
+          setActiveDistributionMethods(activeMethods.length);
+
           if (activeMethods.length > 0) {
             setDistributionStatus('complete');
             if (activeMethods.length === 1) {
@@ -188,13 +256,13 @@ export default function POAPDetailPage() {
             }
           }
         }
-        
+
         // Fetch attributes
         try {
           const attributesResponse = await fetch(`/api/poaps/${id}/attributes`);
           if (attributesResponse.ok) {
             const data = await attributesResponse.json();
-            
+
             if (data.attributes) {
               // Check if all essential fields are filled
               const attrs = data.attributes;
@@ -203,19 +271,38 @@ export default function POAPDetailPage() {
               const hasPlatform = !!(attrs.eventType === 'Online' && attrs.platform);
               const hasArtists = !!(attrs.artists && attrs.artists.length > 0);
               const hasOrganization = !!attrs.organization;
-              
+
+              // Store artists and organization data
+              if (attrs.artists && attrs.artists.length > 0) {
+                setArtists(
+                  attrs.artists.map((artist: any) => ({
+                    name: artist.name,
+                    url: artist.url || '',
+                  }))
+                );
+              }
+
+              if (attrs.organization) {
+                setOrganization({
+                  name: attrs.organization.name,
+                  url: attrs.organization.url || '',
+                });
+              }
+
               let summary = '';
               let status: 'complete' | 'incomplete' | 'partial' = 'incomplete';
-              
+
               // Determine the status based on field completeness
               if (hasEventType && (hasLocation || hasPlatform)) {
-                if (hasArtists && hasOrganization) {
+                if (hasOrganization) {
+                  // Mark as complete if organization is set, regardless of artists
                   status = 'complete';
-                  summary = 'All attributes configured';
+                  summary = hasArtists
+                    ? 'All attributes configured'
+                    : 'Essential attributes configured';
                 } else {
                   status = 'partial';
                   const missing = [];
-                  if (!hasArtists) missing.push('artist');
                   if (!hasOrganization) missing.push('organization');
                   summary = `${attrs.eventType === 'Physical' ? 'Location' : 'Platform'} set, ${missing.join(' and ')} missing`;
                 }
@@ -223,7 +310,7 @@ export default function POAPDetailPage() {
                 status = 'incomplete';
                 summary = 'Basic attributes missing';
               }
-              
+
               setAttributesStatus(status);
               setAttributesSummary(summary);
             }
@@ -234,22 +321,22 @@ export default function POAPDetailPage() {
         } catch (attrError) {
           console.error('Exception fetching attributes:', attrError);
         }
-        
+
         // Fetch settings
         try {
           const settingsResponse = await fetch(`/api/poaps/${id}/settings`);
           if (settingsResponse.ok) {
             const data = await settingsResponse.json();
-            
+
             if (data.settings) {
               const settings = data.settings;
               // Settings are considered complete when at least visibility is set
               setSettingsStatus('complete');
-              
+
               // Generate appropriate summary
               const visibility = settings.visibility || 'Public';
               const hasDates = !!(settings.defaultStartDate || settings.defaultEndDate);
-              
+
               if (hasDates) {
                 setSettingsSummary(`${visibility} with custom dates`);
               } else {
@@ -322,6 +409,35 @@ export default function POAPDetailPage() {
             </Button>
           </Link>
         </div>
+
+        {/* Show token status alert if no tokens have been minted but there are active distribution methods */}
+        {poap && (
+          <TokenStatusAlert
+            tokenStatus={{
+              minted: !!poap.token,
+              supply: poap.token?.supply || 0,
+              metadataOutdated: metadataOutdated,
+              lastUpdated: poap.token?.updatedAt
+                ? new Date(poap.token.updatedAt).toISOString()
+                : undefined,
+            }}
+            poapId={id}
+            hasDistributionMethods={activeDistributionMethods > 0}
+            onTokensMinted={newSupply => {
+              // Update the local state when tokens are minted
+              setPoap({
+                ...poap,
+                token: {
+                  id: poap.token?.id || `temp-${id}`,
+                  mintAddress: poap.token?.mintAddress || 'pending',
+                  supply: newSupply,
+                  decimals: poap.token?.decimals || 0,
+                },
+              });
+            }}
+            onMetadataUpdated={handleMetadataUpdated}
+          />
+        )}
 
         <div className="bg-white rounded-xl overflow-hidden border border-neutral-200 shadow-sm p-6 md:p-8 transition-all duration-200 hover:shadow-md hover:border-neutral-300 mb-8">
           <div className="flex flex-col lg:flex-row gap-8">
@@ -417,16 +533,75 @@ export default function POAPDetailPage() {
                       </InteractiveExternalLink>
                     </div>
                   )}
-                </div>
-              </div>
 
-              {/* Metadata and timestamps */}
-              <div className="border-t border-neutral-200 pt-4 mt-6">
-                <div className="text-xs text-neutral-500 space-y-1">
-                  <p>Created: {new Date(poap.createdAt).toLocaleString()}</p>
-                  <p>Last updated: {new Date(poap.updatedAt).toLocaleString()}</p>
-                  <p>ID: {poap.id}</p>
+                  {/* Token information - new section */}
+                  {poap.token && (
+                    <div>
+                      <h3 className="text-sm font-medium text-neutral-500 mb-2">Tokens</h3>
+                      <div className="flex items-center gap-2 text-neutral-700">
+                        <Award className="h-4 w-4 text-purple-500" />
+                        <span>{poap.token.supply.toLocaleString()} tokens minted</span>
+                      </div>
+                    </div>
+                  )}
                 </div>
+
+                {/* Artist and Organization Information */}
+                {(artists.length > 0 || organization) && (
+                  <div className="mt-6 space-y-6">
+                    {artists.length > 0 && (
+                      <div>
+                        <h3 className="text-sm font-medium text-neutral-500 mb-2">
+                          Artist Details
+                        </h3>
+                        <div className="space-y-3">
+                          {artists.map((artist, index) => (
+                            <div key={index} className="flex items-start gap-2 text-neutral-700">
+                              <User className="h-4 w-4 text-pink-500 mt-0.5" />
+                              <div>
+                                <span className="font-medium">{artist.name}</span>
+                                {artist.url && (
+                                  <div className="mt-1">
+                                    <InteractiveExternalLink
+                                      href={artist.url}
+                                      className="text-sm text-blue-600 hover:text-blue-700 hover:underline"
+                                      ariaLabel={`Visit ${artist.name}'s website`}
+                                    >
+                                      {artist.url}
+                                    </InteractiveExternalLink>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {organization && (
+                      <div>
+                        <h3 className="text-sm font-medium text-neutral-500 mb-2">Organization</h3>
+                        <div className="flex items-start gap-2 text-neutral-700">
+                          <Building className="h-4 w-4 text-blue-500 mt-0.5" />
+                          <div>
+                            <span className="font-medium">{organization.name}</span>
+                            {organization.url && (
+                              <div className="mt-1">
+                                <InteractiveExternalLink
+                                  href={organization.url}
+                                  className="text-sm text-blue-600 hover:text-blue-700 hover:underline"
+                                  ariaLabel={`Visit ${organization.name}'s website`}
+                                >
+                                  {organization.url}
+                                </InteractiveExternalLink>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -447,7 +622,20 @@ export default function POAPDetailPage() {
                 summary={distributionSummary}
               />
               <ConfigStatusCard
-                title="Attributes"
+                title="Token"
+                status={
+                  poap.token ? 'complete' : activeDistributionMethods > 0 ? 'error' : 'incomplete'
+                }
+                icon={<Coins className="h-5 w-5" />}
+                href={`/poaps/${id}/token`}
+                summary={
+                  poap.token
+                    ? `${poap.token.supply.toLocaleString()} tokens minted`
+                    : 'No tokens minted yet'
+                }
+              />
+              <ConfigStatusCard
+                title="Metadata"
                 status={attributesStatus}
                 icon={<User className="h-5 w-5" />}
                 href={`/poaps/${id}/attributes`}

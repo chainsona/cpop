@@ -17,7 +17,7 @@ DATABASE_URL="postgresql://postgres:password@localhost:5432/poap?schema=public"
 NEXT_PUBLIC_SUPABASE_URL="https://your-project-id.supabase.co"
 NEXT_PUBLIC_SUPABASE_ANON_KEY="your-supabase-anon-key"
 
-# Note: Make sure to create a storage bucket named "poap-images" in your Supabase project
+# Note: Make sure to create a storage bucket named "cpop" in your Supabase project
 # for the image upload functionality to work properly
 `;
 
@@ -49,7 +49,7 @@ function createEnvFile() {
   console.log('\n⚠️ Make sure to update the placeholder values with your actual configuration:');
   console.log('  1. Set up a PostgreSQL database and update DATABASE_URL');
   console.log('  2. Create a Supabase project and update SUPABASE_URL and SUPABASE_ANON_KEY');
-  console.log('  3. Create a "poap-images" storage bucket in your Supabase project');
+  console.log('  3. Create a "cpop" storage bucket in your Supabase project');
   console.log('\n📖 For more information, see docs/ENV_SETUP.md');
 
   rl.close();
