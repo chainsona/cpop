@@ -43,14 +43,14 @@ function isBase64ImageTooLarge(base64String: string, maxSizeInMB: number = 2): b
 }
 
 // POST handler to create a new POAP
-async function postHandler(req: NextRequest) {
+async function postHandler(request: NextRequest) {
   try {
     // Get user from session for creator assignment
     const session = await getServerSession(authOptions);
     const userId = session?.user?.id;
     
     // For wallet-based auth, get wallet from request
-    const walletAddress = (req as any).wallet?.address;
+    const walletAddress = (request as any).wallet?.address;
     
     // If neither session nor wallet, return unauthorized
     if (!userId && !walletAddress) {
@@ -61,7 +61,7 @@ async function postHandler(req: NextRequest) {
     }
     
     // Parse and validate the request body
-    const body = await req.json();
+    const body = await request.json();
 
     // Create a user if not exists - in case of wallet auth only
     let creatorId = userId;
@@ -136,14 +136,14 @@ async function postHandler(req: NextRequest) {
 }
 
 // GET handler to fetch POAPs
-async function getHandler(req: NextRequest) {
+async function getHandler(request: NextRequest) {
   try {
     // Get user from session for filtering
     const session = await getServerSession(authOptions);
     const userId = session?.user?.id;
     
     // For wallet-based auth, get wallet from request
-    const walletAddress = (req as any).wallet?.address;
+    const walletAddress = (request as any).wallet?.address;
     
     // Build the query based on authentication
     const where: any = {};
@@ -218,5 +218,5 @@ async function getHandler(req: NextRequest) {
 }
 
 // Export wrapped handlers with auth middleware
-export const POST = (req: NextRequest) => apiMiddleware(req, postHandler);
-export const GET = (req: NextRequest) => apiMiddleware(req, getHandler);
+export const POST = (request: NextRequest) => apiMiddleware(request, () => postHandler(request));
+export const GET = (request: NextRequest) => apiMiddleware(request, () => getHandler(request));

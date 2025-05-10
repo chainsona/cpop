@@ -181,7 +181,7 @@ export function SecretWordForm({ id, onSuccess }: SecretWordFormProps) {
           <p className="text-neutral-600">This word will be required to claim the POAP.</p>
 
           <div className="max-w-md">
-            <Label htmlFor="word">Secret word</Label>
+            <Label htmlFor="word">Secret word <span className="text-red-500">*</span></Label>
             <PasswordInput
               id="word"
               placeholder="Enter a secret word or phrase"

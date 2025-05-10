@@ -342,7 +342,7 @@ export function POAPForm({ mode = 'create', initialData, onSuccess }: POAPFormPr
           name="title"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Title</FormLabel>
+              <FormLabel>Title <span className="text-red-500">*</span></FormLabel>
               <FormControl>
                 <Input placeholder="Enter POAP title" {...field} />
               </FormControl>
@@ -356,7 +356,7 @@ export function POAPForm({ mode = 'create', initialData, onSuccess }: POAPFormPr
           name="description"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Description</FormLabel>
+              <FormLabel>Description <span className="text-red-500">*</span></FormLabel>
               <FormControl>
                 <Textarea
                   placeholder="Enter POAP description"
@@ -374,9 +374,7 @@ export function POAPForm({ mode = 'create', initialData, onSuccess }: POAPFormPr
           name="imageUrl"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>
-                Image <span className="text-xs text-neutral-500">(stored in Supabase Storage)</span>
-              </FormLabel>
+              <FormLabel>Image <span className="text-red-500">*</span></FormLabel>
               <FormControl>
                 <div className="space-y-2">
                   {/* File Upload Area */}
@@ -506,7 +504,7 @@ export function POAPForm({ mode = 'create', initialData, onSuccess }: POAPFormPr
           name="website"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Website (Optional)</FormLabel>
+              <FormLabel>Website</FormLabel>
               <FormControl>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-neutral-500">
@@ -591,7 +589,7 @@ export function POAPForm({ mode = 'create', initialData, onSuccess }: POAPFormPr
           name="attendees"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Attendees (Optional)</FormLabel>
+              <FormLabel>Attendees</FormLabel>
               <FormControl>
                 <Input
                   type="number"

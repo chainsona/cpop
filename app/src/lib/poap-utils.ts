@@ -191,10 +191,6 @@ export async function updatePoapStatusBasedOnDistributionMethods(poapId: string)
  */
 export async function mintTokensAfterDistributionCreated(poapId: string): Promise<any> {
   try {
-    // Import module dynamically
-    const mintModule = await import('../app/api/poaps/[id]/mint/route');
-    const { mintCompressedTokens } = mintModule;
-
     // Check if tokens are already minted
     const existingToken = await prisma.poapToken.findFirst({
       where: { poapId },
@@ -245,6 +241,11 @@ export async function mintTokensAfterDistributionCreated(poapId: string): Promis
           where: { distributionMethodId: method.id },
         });
         totalSupply += locationBased?.maxClaims || 0;
+      } else if (method.type === 'Airdrop') {
+        const airdrop = await prisma.airdrop.findUnique({
+          where: { distributionMethodId: method.id },
+        });
+        totalSupply += airdrop?.addresses?.length || 0;
       }
     }
 
@@ -254,20 +255,23 @@ export async function mintTokensAfterDistributionCreated(poapId: string): Promis
       totalSupply = 0;
     }
 
-    // Mint tokens directly
-    const mintAddress = await mintCompressedTokens(
-      {
-        ...poap,
-        createdAt: poap.createdAt, // Ensure this is passed
-      },
-      totalSupply
-    );
+    // Instead of calling the route handler, make a POST request to the API endpoint
+    const response = await post(`/api/poaps/${poapId}/mint`, {}) as { 
+      success: boolean;
+      message?: string;
+      error?: string;
+      mintAddress?: string;
+    };
+    
+    if (!response.success) {
+      throw new Error(response.error || 'Failed to mint tokens');
+    }
 
     return {
       success: true,
       message: 'Tokens minted successfully',
       tokenSupply: totalSupply,
-      mintAddress,
+      mintAddress: response.mintAddress,
     };
   } catch (error) {
     console.error('Error minting tokens after distribution creation:', error);
@@ -307,6 +311,12 @@ export async function calculateAdditionalSupplyNeeded(
       additionalSupply = method.secretWord.maxClaims || 0;
     } else if (method.type === 'LocationBased' && method.locationBased) {
       additionalSupply = method.locationBased.maxClaims || 0;
+    } else if (method.type === 'Airdrop') {
+      // Fetch the airdrop data explicitly since it's not included in the initial query
+      const airdrop = await prisma.airdrop.findUnique({
+        where: { distributionMethodId: method.id },
+      });
+      additionalSupply = airdrop?.addresses?.length || 0;
     }
 
     return additionalSupply;
@@ -342,12 +352,19 @@ export async function mintAdditionalTokenSupply(
       return null;
     }
 
-    // Import module dynamically
-    const additionalModule = await import('../app/api/poaps/[id]/mint/additional/route');
-    const { mintAdditionalTokens } = additionalModule;
+    // Instead of importing from the route, make a POST request to the API endpoint
+    const response = await post(`/api/poaps/${poapId}/mint/additional`, {
+      additionalSupply
+    }) as {
+      success: boolean;
+      message?: string;
+      error?: string;
+      mintAddress?: string;
+    };
 
-    // Mint additional tokens directly
-    const result = await mintAdditionalTokens(poapId, additionalSupply);
+    if (!response.success) {
+      throw new Error(response.error || 'Failed to mint additional tokens');
+    }
 
     return {
       success: true,

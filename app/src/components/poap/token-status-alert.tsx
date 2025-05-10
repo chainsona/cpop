@@ -176,73 +176,45 @@ export function TokenStatusAlert({
     );
   }
 
-  // Token exists and has supply - show success message
-  if (tokenStatus.minted && tokenStatus.supply > 0) {
-    return (
-      <div className="bg-green-50 rounded-lg p-4 flex gap-3 items-start mb-6 shadow-sm">
-        <Coins className="h-5 w-5 text-green-500 flex-shrink-0 mt-0.5" />
-        <div className="flex-1">
-          <h3 className="font-medium text-green-800 mb-1">
-            {tokenStatus.supply.toLocaleString()} compressed tokens minted
-          </h3>
-          <p className="text-green-700 text-sm">
-            Your POAP has compressed tokens ready for distribution. Adding more distribution methods
-            will automatically increase your token supply.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  // Token exists but has 0 supply - show info message
-  if (tokenStatus.minted && tokenStatus.supply === 0) {
-    return (
-      <div className="bg-blue-50 rounded-lg p-4 flex gap-3 items-start mb-6 shadow-sm">
-        <Coins className="h-5 w-5 text-blue-500 flex-shrink-0 mt-0.5" />
-        <div className="flex-1">
-          <h3 className="font-medium text-blue-800 mb-1">POAP token created with 0 supply</h3>
-          <p className="text-blue-700 text-sm">
-            Your POAP token has been created but has 0 supply. Adding more distribution methods will
-            automatically mint additional tokens as needed.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
   // If there are no distribution methods at all, don't show the warning
   if (!hasDistributionMethods) {
     return null;
   }
 
   // Show warning only if no token exists but there are distribution methods
-  return (
-    <div className="bg-amber-50 rounded-lg p-4 flex gap-3 items-start mb-6 shadow-sm animate-pulse-subtle">
-      <AlertTriangle className="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" />
-      <div className="flex-1">
-        <h3 className="font-medium text-amber-800 mb-1">Action Required: Mint Your POAP Tokens</h3>
-        <p className="text-amber-700 text-sm mb-3">
-          Your distribution methods are ready, but you need to mint tokens first.
-        </p>
-        <Button
-          size="sm"
-          className="bg-amber-600 text-white hover:bg-amber-700 gap-1.5 border-0"
-          onClick={mintTokens}
-          disabled={isLoading}
-        >
-          {isLoading ? (
-            <>
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Minting...
-            </>
-          ) : (
-            <>
-              <Coins className="h-4 w-4" />
-              Mint POAP Token
-            </>
-          )}
-        </Button>
+  if (!tokenStatus.minted) {
+    return (
+      <div className="bg-amber-50 rounded-lg p-4 flex gap-3 items-start mb-6 shadow-sm animate-pulse-subtle">
+        <AlertTriangle className="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" />
+        <div className="flex-1">
+          <h3 className="font-medium text-amber-800 mb-1">
+            Action Required: Mint Your POAP Tokens
+          </h3>
+          <p className="text-amber-700 text-sm mb-3">
+            Your distribution methods are ready, but you need to mint tokens first.
+          </p>
+          <Button
+            size="sm"
+            className="bg-amber-600 text-white hover:bg-amber-700 gap-1.5 border-0"
+            onClick={mintTokens}
+            disabled={isLoading}
+          >
+            {isLoading ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Minting...
+              </>
+            ) : (
+              <>
+                <Coins className="h-4 w-4" />
+                Mint POAP Token
+              </>
+            )}
+          </Button>
+        </div>
       </div>
-    </div>
-  );
+    );
+  }
+
+  return null;
 }

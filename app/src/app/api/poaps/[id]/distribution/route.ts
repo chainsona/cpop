@@ -92,12 +92,12 @@ async function checkUserAuthorization(req: NextRequest, poapId: string): Promise
 }
 
 // GET handler to retrieve distribution methods
-async function getHandler(req: NextRequest, context: { params: Params }) {
+async function getHandler(request: Request, { params }: { params: Promise<Params > }) {
   try {
-    const { id: poapId } = await context.params;
+    const { id: poapId  } = await params;
 
     // Check authorization
-    const isAuthorized = await checkUserAuthorization(req, poapId);
+    const isAuthorized = await checkUserAuthorization(request as unknown as NextRequest, poapId);
 
     if (!isAuthorized) {
       return NextResponse.json(
@@ -117,6 +117,7 @@ async function getHandler(req: NextRequest, context: { params: Params }) {
         claimLinks: true,
         secretWord: true,
         locationBased: true,
+        airdrop: true,
       },
     });
 
@@ -128,12 +129,12 @@ async function getHandler(req: NextRequest, context: { params: Params }) {
 }
 
 // POST handler to create a new distribution method
-async function postHandler(req: NextRequest, context: { params: Params }) {
+async function postHandler(request: Request, { params }: { params: Promise<Params > }) {
   try {
-    const { id: poapId } = await context.params;
+    const { id: poapId  } = await params;
 
     // Check authorization
-    const isAuthorized = await checkUserAuthorization(req, poapId);
+    const isAuthorized = await checkUserAuthorization(request as unknown as NextRequest, poapId);
 
     if (!isAuthorized) {
       return NextResponse.json(
@@ -146,15 +147,15 @@ async function postHandler(req: NextRequest, context: { params: Params }) {
     }
 
     // Parse request body
-    const body = await req.json();
+    const body = await request.json();
 
     // Validate distribution method type
-    if (!body.type || !['ClaimLinks', 'SecretWord', 'LocationBased'].includes(body.type)) {
+    if (!body.type || !['ClaimLinks', 'SecretWord', 'LocationBased', 'Airdrop'].includes(body.type)) {
       return NextResponse.json({ error: 'Invalid distribution method type' }, { status: 400 });
     }
 
     // Create a new distribution method
-    const distributionMethod = await prisma.distributionMethod.create({
+    let distributionMethod = await prisma.distributionMethod.create({
       data: {
         poapId,
         type: body.type,
@@ -203,7 +204,92 @@ async function postHandler(req: NextRequest, context: { params: Params }) {
         break;
 
       case 'ClaimLinks':
-        // For claim links, we'll create them in a separate API call
+        // Create the claim links
+        if (!body.amount || typeof body.amount !== 'number' || body.amount < 1) {
+          return NextResponse.json({ error: 'Amount must be a positive number' }, { status: 400 });
+        }
+
+        // Function to generate a random token
+        const generateToken = () => {
+          const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+          const length = 32;
+          let token = '';
+          for (let i = 0; i < length; i++) {
+            token += characters.charAt(Math.floor(Math.random() * characters.length));
+          }
+          return token;
+        };
+
+        // Create claim links with unique tokens and handle potential duplicates
+        try {
+          // Track already generated tokens to ensure uniqueness
+          const generatedTokens = new Set();
+          const claimLinks = [];
+          
+          for (let i = 0; i < body.amount; i++) {
+            let token;
+            // Generate a token that's not already in our set
+            do {
+              token = generateToken();
+            } while (generatedTokens.has(token));
+            
+            // Add to our set to track uniqueness
+            generatedTokens.add(token);
+            
+            claimLinks.push({
+              distributionMethodId: distributionMethod.id,
+              token,
+              expiresAt: body.expiryDate ? new Date(body.expiryDate) : null,
+            });
+          }
+
+          // Batch create all claim links
+          await prisma.claimLink.createMany({
+            data: claimLinks,
+          });
+
+          // Verify the correct number of links were created
+          const createdCount = await prisma.claimLink.count({
+            where: { distributionMethodId: distributionMethod.id }
+          });
+
+          // If we didn't create all the requested links, something went wrong
+          if (createdCount !== body.amount) {
+            console.warn(`Requested ${body.amount} claim links but created ${createdCount}`);
+          }
+
+          // Update the distributionMethod object with the newly created claim links
+          distributionMethod = await prisma.distributionMethod.findUnique({
+            where: { id: distributionMethod.id },
+            include: {
+              claimLinks: true,
+            },
+          }) || distributionMethod;
+        } catch (error) {
+          console.error('Error creating claim links:', error);
+          return NextResponse.json({ 
+            error: 'Failed to create claim links',
+            message: error instanceof Error ? error.message : 'Unknown error'
+          }, { status: 500 });
+        }
+        break;
+
+      case 'Airdrop':
+        // Validate addresses
+        if (!Array.isArray(body.addresses) || body.addresses.length === 0) {
+          return NextResponse.json({ error: 'Addresses array is required' }, { status: 400 });
+        }
+        
+        // Create the Airdrop distribution method
+        await prisma.airdrop.create({
+          data: {
+            distributionMethodId: distributionMethod.id,
+            addresses: body.addresses,
+            maxClaims: body.maxClaims || null,
+            startDate: body.startDate ? new Date(body.startDate) : null,
+            endDate: body.endDate ? new Date(body.endDate) : null,
+          },
+        });
         break;
     }
 
@@ -269,11 +355,11 @@ async function postHandler(req: NextRequest, context: { params: Params }) {
 }
 
 // Export wrapped handlers with auth middleware
-export const GET = (req: NextRequest, ctx: { params: Params }) =>
-  apiMiddleware(req, async () => getHandler(req, ctx));
+export const GET = (request: NextRequest, ctx: { params: Promise<Params> }) =>
+  apiMiddleware(request, async () => getHandler(request as Request, ctx));
 
-export const POST = (req: NextRequest, ctx: { params: Params }) =>
-  apiMiddleware(req, async () => postHandler(req, ctx));
+export const POST = (request: NextRequest, ctx: { params: Promise<Params> }) =>
+  apiMiddleware(request, async () => postHandler(request as Request, ctx));
 
 // Function to mint compressed tokens for the first time
 async function mintCompressedTokens(poap: PoapData, amount: number) {

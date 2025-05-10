@@ -15,15 +15,15 @@ import bs58 from 'bs58';
 
 const RPC_ENDPOINT = process.env.SOLANA_RPC_ENDPOINT || '';
 
-type Params = Promise<{
+type Params = {
   id: string;
-}>;
+};
 
 /**
  * Function to mint additional tokens for a POAP
  * Made available for direct server usage
  */
-export async function mintAdditionalTokens(
+async function mintAdditionalTokens(
   poapId: string,
   additionalSupply: number
 ): Promise<{ mintAddress: string; newTotalSupply: number }> {
@@ -109,10 +109,10 @@ export async function mintAdditionalTokens(
 }
 
 // POST handler for minting additional tokens
-async function postHandler(req: NextRequest, { params }: { params: Params }) {
+async function postHandler(request: Request, { params }: { params: Promise<Params> }) {
   try {
     // Check for Solana wallet auth first
-    const walletAddress = (req as any).wallet?.address;
+    const walletAddress = (request as any).wallet?.address;
 
     // Try NextAuth session as fallback
     const session = await getServerSession(authOptions);
@@ -162,7 +162,7 @@ async function postHandler(req: NextRequest, { params }: { params: Params }) {
     }
 
     // Parse request body to get the additional supply amount
-    const body = await req.json();
+    const body = await request.json();
     const additionalSupply = Number(body.additionalSupply) || 0;
 
     if (additionalSupply <= 0) {
@@ -199,5 +199,5 @@ async function postHandler(req: NextRequest, { params }: { params: Params }) {
 }
 
 // Export the handler wrapped with API middleware
-export const POST = (req: NextRequest, ctx: { params: Params }) =>
-  apiMiddleware(req, async () => postHandler(req, ctx));
+export const POST = (request: NextRequest, ctx: { params: Promise<Params> }) =>
+  apiMiddleware(request, async () => postHandler(request as Request, ctx));

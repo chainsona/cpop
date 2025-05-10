@@ -1,7 +1,14 @@
 import React from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Coins, Link2, LockKeyhole, MapPin } from 'lucide-react';
+import {
+  Coins,
+  Link2 as Link2Icon,
+  LockKeyhole,
+  MapPin,
+  Plane,
+  X
+} from 'lucide-react';
 import Link from 'next/link';
 
 export interface AddMethodDialogProps {
@@ -30,7 +37,7 @@ export function AddMethodDialog({ poapId, onClose, onMethodAdded }: AddMethodDia
             <div className="border border-neutral-200 hover:border-blue-300 rounded-lg p-4 cursor-pointer transition-colors">
               <div className="flex items-center gap-3 mb-2">
                 <div className="bg-blue-50 p-2 rounded-full">
-                  <Link2 className="h-5 w-5 text-blue-600" />
+                  <Link2Icon className="h-5 w-5 text-blue-600" />
                 </div>
                 <h3 className="font-medium">Claim Links</h3>
               </div>
@@ -77,6 +84,25 @@ export function AddMethodDialog({ poapId, onClose, onMethodAdded }: AddMethodDia
               </p>
               <div className="mt-3">
                 <Link href={`/poaps/${poapId}/distribution/new?type=location`} passHref>
+                  <Button size="sm" variant="outline" className="w-full">
+                    Select
+                  </Button>
+                </Link>
+              </div>
+            </div>
+            
+            <div className="border border-neutral-200 hover:border-purple-300 rounded-lg p-4 cursor-pointer transition-colors">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="bg-purple-50 p-2 rounded-full">
+                  <Plane className="h-5 w-5 text-purple-600" />
+                </div>
+                <h3 className="font-medium">Airdrop</h3>
+              </div>
+              <p className="text-sm text-neutral-600">
+                Mint tokens directly to a list of Solana wallet addresses
+              </p>
+              <div className="mt-3">
+                <Link href={`/poaps/${poapId}/distribution/new?type=airdrop`} passHref>
                   <Button size="sm" variant="outline" className="w-full">
                     Select
                   </Button>

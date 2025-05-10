@@ -429,8 +429,8 @@ export function LocationSearchFallback({
         {/* Location information fields */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
           <div className="md:col-span-2">
-            <Label htmlFor="city" className="required">
-              City
+            <Label htmlFor="city">
+              City <span className="text-red-500">*</span>
             </Label>
             <Input
               id="city"

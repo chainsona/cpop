@@ -14,6 +14,7 @@ import {
   Eye,
   Ban,
   ArrowLeft,
+  Plane,
 } from 'lucide-react';
 import { POAPTabNav } from '@/components/poap/poap-tab-nav';
 import { TokenStatusAlert } from '@/components/poap/token-status-alert';
@@ -23,12 +24,13 @@ import { MethodCard } from '@/components/poap/distribution/method-card';
 import { ClaimLinksForm } from '@/components/poap/distribution/claim-links-form';
 import { SecretWordForm } from '@/components/poap/distribution/secret-word-form';
 import { LocationBasedForm } from '@/components/poap/distribution/location-based-form';
+import { AirdropForm } from '@/components/poap/distribution/airdrop-form';
 import { AddMethodDialog } from '@/components/poap/distribution/add-method-dialog';
 
 // Types for the distribution methods
 interface DistributionMethod {
   id: string;
-  type: 'ClaimLinks' | 'SecretWord' | 'LocationBased';
+  type: 'ClaimLinks' | 'SecretWord' | 'LocationBased' | 'Airdrop';
   disabled: boolean;
   settings: any;
   createdAt: string;
@@ -52,6 +54,13 @@ interface DistributionMethod {
     latitude?: number | null;
     longitude?: number | null;
     radius?: number;
+    maxClaims: number | null;
+    claimCount: number;
+    startDate: string | null;
+    endDate: string | null;
+  };
+  airdrop?: {
+    addresses: string[];
     maxClaims: number | null;
     claimCount: number;
     startDate: string | null;
@@ -206,11 +215,13 @@ export default function POAPDistributionPage() {
   const getMethodIcon = (type: string) => {
     switch (type) {
       case 'ClaimLinks':
-        return <LinkIcon className="h-6 w-6 text-blue-600" />;
+        return <LinkIcon className="h-5 w-5 text-blue-600" />;
       case 'SecretWord':
-        return <LockKeyhole className="h-6 w-6 text-emerald-600" />;
+        return <LockKeyhole className="h-5 w-5 text-emerald-600" />;
       case 'LocationBased':
-        return <MapPin className="h-6 w-6 text-orange-600" />;
+        return <MapPin className="h-5 w-5 text-orange-600" />;
+      case 'Airdrop':
+        return <Plane className="h-5 w-5 text-purple-600" />;
       default:
         return null;
     }
@@ -220,33 +231,38 @@ export default function POAPDistributionPage() {
   const getMethodDetails = (method: DistributionMethod) => {
     switch (method.type) {
       case 'ClaimLinks':
-        const links = method.claimLinks || [];
-        const claimed = links.filter(link => link.claimed).length;
         return {
           title: 'Claim Links',
-          description: `${links.length} links generated, ${claimed} claimed${method.claimLinks?.[0]?.expiresAt ? `, expires on ${new Date(method.claimLinks[0].expiresAt).toLocaleDateString()}` : ''}`,
+          description: method.claimLinks
+            ? `${method.claimLinks.length} unique claim links, ${method.claimLinks.filter(l => l.claimed).length} claimed`
+            : 'Distributed via unique claim links',
         };
       case 'SecretWord':
-        if (!method.secretWord)
-          return { title: 'Secret Word', description: 'No details available' };
         return {
           title: 'Secret Word',
-          description: `Word: ${method.secretWord.word}, ${method.secretWord.claimCount} claims so far${method.secretWord.maxClaims ? ` (max: ${method.secretWord.maxClaims})` : ''}`,
+          description: method.secretWord
+            ? `${method.secretWord.claimCount} claims${method.secretWord.maxClaims ? ` out of max ${method.secretWord.maxClaims}` : ''}`
+            : 'Claimed using a secret word',
         };
       case 'LocationBased':
-        // Check if locationBased exists and has at least city property
-        if (!method.locationBased || !method.locationBased.city)
-          return { title: 'Location Based', description: 'No details available' };
-        
-        // Get radius value with a fallback to 500 (default value)
-        const radius = method.locationBased.radius || 500;
-        
         return {
           title: 'Location Based',
-          description: `${method.locationBased.city}${method.locationBased.country ? `, ${method.locationBased.country}` : ''}, radius: ${radius}m, ${method.locationBased.claimCount || 0} claims`,
+          description: method.locationBased
+            ? `${method.locationBased.city}${method.locationBased.maxClaims ? `: ${method.locationBased.claimCount} of ${method.locationBased.maxClaims} claimed` : ''}`
+            : 'Available at a specific location',
+        };
+      case 'Airdrop':
+        return {
+          title: 'Airdrop Distribution',
+          description: method.airdrop
+            ? `${method.airdrop.addresses?.length || 0} addresses${method.airdrop.maxClaims ? `, ${method.airdrop.claimCount} of ${method.airdrop.maxClaims} claimed` : ''}`
+            : 'Direct distribution to wallet addresses',
         };
       default:
-        return { title: 'Unknown Method', description: 'No details available' };
+        return {
+          title: 'Unknown Method',
+          description: 'Unknown distribution method',
+        };
     }
   };
 
@@ -421,7 +437,7 @@ export default function POAPDistributionPage() {
                   <h3 className="text-lg font-semibold text-neutral-700">
                     {activeMethods.length > 0
                       ? 'Add Another Distribution Method'
-                      : 'How will people claim this POAP?'}
+                      : 'How will people mint this POAP?'}
                   </h3>
                 </div>
                 <div className="grid gap-6 grid-cols-1 md:grid-cols-3">
@@ -442,6 +458,12 @@ export default function POAPDistributionPage() {
                     icon={<MapPin className="h-6 w-6 text-orange-600" />}
                     description="Recipients must be in a specific location to claim"
                     onClick={() => setSelectedMethod('location')}
+                  />
+                  <MethodCard
+                    title="Airdrop"
+                    icon={<Plane className="h-6 w-6 text-purple-600" />}
+                    description="Directly mint tokens to a list of Solana addresses"
+                    onClick={() => setSelectedMethod('airdrop')}
                   />
                 </div>
               </>
@@ -465,6 +487,9 @@ export default function POAPDistributionPage() {
                 )}
                 {selectedMethod === 'location' && (
                   <LocationBasedForm id={id} onSuccess={() => setSelectedMethod(null)} />
+                )}
+                {selectedMethod === 'airdrop' && (
+                  <AirdropForm id={id} onSuccess={() => setSelectedMethod(null)} />
                 )}
               </div>
             )}

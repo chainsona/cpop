@@ -1,13 +1,13 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useWalletContext } from '@/contexts/wallet-context';
 import { WalletAuth } from '@/components/wallet/wallet-auth';
 import { Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
-export default function AuthPage() {
+function AuthContent() {
   const { isConnected } = useWalletContext();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -92,5 +92,18 @@ export default function AuthPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function AuthPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex flex-col items-center justify-center min-h-screen">
+        <Loader2 className="h-8 w-8 animate-spin text-neutral-300" />
+        <p className="text-neutral-500 mt-4">Loading auth page...</p>
+      </div>
+    }>
+      <AuthContent />
+    </Suspense>
   );
 } 

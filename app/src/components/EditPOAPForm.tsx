@@ -269,7 +269,7 @@ export function EditPOAPForm({ poapData }: { poapData: PoapData }) {
           name="title"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Title</FormLabel>
+              <FormLabel>Title <span className="text-red-500">*</span></FormLabel>
               <FormControl>
                 <Input placeholder="Enter POAP title" {...field} />
               </FormControl>
@@ -283,7 +283,7 @@ export function EditPOAPForm({ poapData }: { poapData: PoapData }) {
           name="description"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Description</FormLabel>
+              <FormLabel>Description <span className="text-red-500">*</span></FormLabel>
               <FormControl>
                 <Textarea
                   placeholder="Enter POAP description"

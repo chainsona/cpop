@@ -152,7 +152,6 @@ export function Header() {
 
       // If on a protected page, redirect to home page
       if (needsRedirect) {
-        toast.info('Redirecting to home page');
         router.push('/');
       }
     } catch (error) {
@@ -161,7 +160,6 @@ export function Header() {
 
       // Still try to redirect if we're on a protected page
       if (isProtectedPage(pathname)) {
-        toast.info('Redirecting to home page');
         router.push('/');
       }
     }

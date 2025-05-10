@@ -6,9 +6,9 @@ import { attributesSchema } from '@/lib/validations';
 type Params = Promise<{ id: string }>;
 
 // GET attributes for a POAP
-export async function GET(req: NextRequest, context: { params: Params }) {
+export async function GET(request: Request, { params }: { params: Promise<Params > }) {
   try {
-    const { id } = await context.params;
+    const { id  } = await params;
 
     // Check if POAP exists
     const poap = await prisma.poap.findUnique({
@@ -42,14 +42,14 @@ export async function GET(req: NextRequest, context: { params: Params }) {
 }
 
 // POST to create attributes
-export async function POST(req: NextRequest, context: { params: Params }) {
+export async function POST(request: Request, { params }: { params: Promise<Params > }) {
   try {
-    const { id } = await context.params;
+    const { id  } = await params;
     console.log('Creating attributes for POAP ID:', id);
     
     let body;
     try {
-      body = await req.json();
+      body = await request.json();
       console.log('Request body:', JSON.stringify(body, null, 2));
     } catch (parseError) {
       console.error('Error parsing request body:', parseError);
@@ -228,10 +228,10 @@ export async function POST(req: NextRequest, context: { params: Params }) {
 }
 
 // PATCH to update attributes
-export async function PATCH(req: NextRequest, context: { params: Params }) {
+export async function PATCH(request: Request, { params }: { params: Promise<Params > }) {
   try {
-    const { id } = await context.params;
-    const body = await req.json();
+    const { id  } = await params;
+    const body = await request.json();
 
     // Check if POAP exists
     const poap = await prisma.poap.findUnique({

@@ -24,6 +24,7 @@ export interface DistributionMethod {
   claimLinks?: ClaimLink[];
   secretWord?: SecretWord;
   locationBased?: LocationBased;
+  airdrop?: Airdrop;
 }
 
 // ClaimLink type
@@ -45,7 +46,17 @@ export interface LocationBased {
   city: string;
 }
 
-export type DistributionType = 'ClaimLinks' | 'SecretWord' | 'LocationBased';
+// Airdrop type
+export interface Airdrop {
+  id: string;
+  addresses: string[];
+  maxClaims: number | null;
+  claimCount: number;
+  startDate: string | null;
+  endDate: string | null;
+}
+
+export type DistributionType = 'ClaimLinks' | 'SecretWord' | 'LocationBased' | 'Airdrop';
 
 // Status display information
 export interface StatusDisplay {

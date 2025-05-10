@@ -18,15 +18,35 @@ import {
   AlertTriangle,
   Coins,
   Building,
+  BarChart,
+  RefreshCcw,
+  MapPin,
+  PieChart as PieChartIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { InteractiveExternalLink } from '@/components/ui/interactive-link';
 import { ConfigStatusCard } from '@/components/poap/config-status-card';
 import { POAPTabNav } from '@/components/poap/poap-tab-nav';
 import { TokenStatusAlert } from '@/components/poap/token-status-alert';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { usePageTitle } from '@/contexts/page-title-context';
 import { usePathname } from 'next/navigation';
+import { ExportDataButton } from '@/components/analytics/export-data-button';
+import { toast } from 'sonner';
+import {
+  BarChart as RechartsBarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip as RechartsTooltip,
+  ResponsiveContainer,
+  Legend,
+  PieChart,
+  Pie,
+  Cell,
+} from 'recharts';
+
 // Define the POAP type including status
 interface POAP {
   id: string;
@@ -49,6 +69,23 @@ interface POAP {
     metadataUpdatedAt?: Date;
     updatedAt?: Date;
   } | null;
+}
+
+// Define the analytics data interface
+interface AnalyticsData {
+  totalClaims: number;
+  availableClaims: number;
+  claimMethods: { method: string; count: number }[];
+  claimsByDay: { date: string; count: number }[];
+  mostActiveDay: {
+    date: string | null;
+    count: number;
+  };
+  topClaimMethod: {
+    method: string | null;
+    count: number;
+    percentage: number;
+  };
 }
 
 // Simple StatusBadge component
@@ -186,6 +223,59 @@ export default function POAPDetailPage() {
   const [artists, setArtists] = useState<Array<{ name: string; url: string }>>([]);
   const [organization, setOrganization] = useState<{ name: string; url: string } | null>(null);
   const [metadataOutdated, setMetadataOutdated] = useState(false);
+  const [analyticsData, setAnalyticsData] = useState<AnalyticsData | null>(null);
+  const [analyticsLoading, setAnalyticsLoading] = useState(true);
+  const [analyticsError, setAnalyticsError] = useState<string | null>(null);
+
+  // Colors for pie chart
+  const COLORS = ['#3b82f6', '#10b981', '#f59e0b'];
+
+  // Format dates to be more readable
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  };
+
+  // Transform data for chart display
+  const chartData = useMemo(() => {
+    if (!analyticsData?.claimsByDay || analyticsData.claimsByDay.length === 0) {
+      return [];
+    }
+
+    return analyticsData.claimsByDay.map(item => ({
+      ...item,
+      date: formatDate(item.date),
+    }));
+  }, [analyticsData]);
+
+  // Custom label for pie chart
+  const renderCustomizedLabel = ({
+    cx,
+    cy,
+    midAngle,
+    innerRadius,
+    outerRadius,
+    percent,
+    index,
+  }: any) => {
+    const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
+    const x = cx + radius * Math.cos((-midAngle * Math.PI) / 180);
+    const y = cy + radius * Math.sin((-midAngle * Math.PI) / 180);
+
+    return (
+      <text
+        x={x}
+        y={y}
+        fill="#fff"
+        textAnchor="middle"
+        dominantBaseline="central"
+        fontSize={12}
+        fontWeight="bold"
+      >
+        {`${(percent * 100).toFixed(0)}%`}
+      </text>
+    );
+  };
 
   // Check for metadata outdated flag in localStorage
   useEffect(() => {
@@ -366,6 +456,34 @@ export default function POAPDetailPage() {
     };
   }, [id, setPageTitle]);
 
+  // Fetch analytics data from the API
+  const fetchAnalyticsData = useCallback(async () => {
+    try {
+      setAnalyticsLoading(true);
+      setAnalyticsError(null);
+
+      const response = await fetch(`/api/poaps/${id}/analytics`);
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch analytics data');
+      }
+
+      const data = await response.json();
+      setAnalyticsData(data.analyticsData);
+    } catch (error) {
+      console.error('Error fetching analytics:', error);
+      setAnalyticsError('Failed to load analytics data');
+      toast.error('Failed to load analytics data');
+    } finally {
+      setAnalyticsLoading(false);
+    }
+  }, [id]);
+
+  // Load analytics data on mount
+  useEffect(() => {
+    fetchAnalyticsData();
+  }, [fetchAnalyticsData]);
+
   if (isLoading) {
     return (
       <div className="container mx-auto py-10">
@@ -393,6 +511,14 @@ export default function POAPDetailPage() {
   // Get color palette and status
   const colorPalette = getColorPaletteForId(id);
   const statusDisplay = getStatusDisplay(poap.status);
+
+  // Format date for display
+  const formatMostActiveDay = (dateString: string | null) => {
+    if (!dateString) return 'N/A';
+
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  };
 
   return (
     <div className="container mx-auto py-10">
@@ -613,13 +739,19 @@ export default function POAPDetailPage() {
 
           {/* Overview Tab Content */}
           <div className="p-6 bg-white border-x border-b border-neutral-200 rounded-b-xl">
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+            {/* Overview Section */}
+            <div className="mb-12">
+              <h2 className="text-xl font-bold mb-4">POAP Configuration</h2>
+              
+              {/* Configuration cards grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <ConfigStatusCard
                 title="Distribution"
                 status={distributionStatus}
                 icon={<Users className="h-5 w-5" />}
                 href={`/poaps/${id}/distribution`}
                 summary={distributionSummary}
+                  className="h-full"
               />
               <ConfigStatusCard
                 title="Token"
@@ -633,6 +765,7 @@ export default function POAPDetailPage() {
                     ? `${poap.token.supply.toLocaleString()} tokens minted`
                     : 'No tokens minted yet'
                 }
+                  className="h-full"
               />
               <ConfigStatusCard
                 title="Metadata"
@@ -640,6 +773,7 @@ export default function POAPDetailPage() {
                 icon={<User className="h-5 w-5" />}
                 href={`/poaps/${id}/attributes`}
                 summary={attributesSummary}
+                  className="h-full"
               />
               <ConfigStatusCard
                 title="Settings"
@@ -647,7 +781,281 @@ export default function POAPDetailPage() {
                 icon={<Settings className="h-5 w-5" />}
                 href={`/poaps/${id}/settings`}
                 summary={settingsSummary}
+                  className="h-full"
               />
+            </div>
+          </div>
+            
+            {/* Analytics Section */}
+            <div className="mt-8 pt-8 border-t border-neutral-200">
+              <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4 mb-6">
+                <div>
+                  <h2 className="text-xl font-bold">Analytics</h2>
+                  <p className="text-neutral-600 text-sm mt-1">
+                    Track claims and usage data for your POAP
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  {analyticsData && (
+                    <ExportDataButton 
+                      data={analyticsData} 
+                      filename={`poap-${id}-analytics`} 
+                      defaultFormat="json" 
+                    />
+                  )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5"
+                    onClick={fetchAnalyticsData}
+                    disabled={analyticsLoading}
+                  >
+                    <RefreshCcw className={`h-4 w-4 ${analyticsLoading ? 'animate-spin' : ''}`} />
+                    Refresh
+                  </Button>
+                </div>
+              </div>
+              
+              {analyticsLoading ? (
+                <div className="text-center py-16 bg-neutral-50 rounded-xl border border-neutral-200">
+                  <div className="animate-spin w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full mx-auto mb-4"></div>
+                  <p className="text-neutral-600">Loading analytics data...</p>
+                </div>
+              ) : analyticsError ? (
+                <div className="bg-red-50 border border-red-200 rounded-xl p-8 text-center">
+                  <AlertTriangle className="h-8 w-8 text-red-500 mx-auto mb-4" />
+                  <h3 className="text-lg font-semibold text-red-700 mb-2">Failed to Load Analytics</h3>
+                  <p className="text-red-600 mb-6">{analyticsError}</p>
+                  <Button onClick={fetchAnalyticsData}>Try Again</Button>
+                </div>
+              ) : !analyticsData ? (
+                <div className="bg-neutral-50 border border-neutral-200 rounded-xl p-8 text-center">
+                  <h3 className="text-lg font-semibold text-neutral-700 mb-2">
+                    No Analytics Data Available
+                  </h3>
+                  <p className="text-neutral-600 mb-6">
+                    Add distribution methods and get claims to see analytics data.
+                  </p>
+                  <Link href={`/poaps/${id}/distribution`}>
+                    <Button>Set Up Distribution</Button>
+                  </Link>
+                </div>
+              ) : (
+                <>
+                  {/* Summary cards */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                    <div className="bg-white rounded-lg border border-neutral-200 p-4 hover:shadow-sm transition-shadow">
+                      <div className="flex items-center gap-2 mb-2">
+                        <div className="bg-blue-100 rounded-full p-1.5">
+                          <Users className="h-5 w-5 text-blue-600" />
+                        </div>
+                        <h3 className="font-medium">Total Claims</h3>
+                      </div>
+                      <p className="text-3xl font-bold">{analyticsData.totalClaims || 0}</p>
+                      <p className="text-sm text-neutral-500 mt-1">
+                        Out of {analyticsData.availableClaims || 0} available
+                      </p>
+                    </div>
+
+                    <div className="bg-white rounded-lg border border-neutral-200 p-4 hover:shadow-sm transition-shadow">
+                      <div className="flex items-center gap-2 mb-2">
+                        <div className="bg-emerald-100 rounded-full p-1.5">
+                          <Calendar className="h-5 w-5 text-emerald-600" />
+                        </div>
+                        <h3 className="font-medium">Most Active Day</h3>
+                      </div>
+                      <p className="text-3xl font-bold">
+                        {analyticsData.mostActiveDay?.date
+                          ? formatMostActiveDay(analyticsData.mostActiveDay.date)
+                          : 'None'}
+                      </p>
+                      <p className="text-sm text-neutral-500 mt-1">
+                        {analyticsData.mostActiveDay?.count || 0} claims
+                      </p>
+                    </div>
+
+                    <div className="bg-white rounded-lg border border-neutral-200 p-4 hover:shadow-sm transition-shadow">
+                      <div className="flex items-center gap-2 mb-2">
+                        <div className="bg-orange-100 rounded-full p-1.5">
+                          <MapPin className="h-5 w-5 text-orange-600" />
+                        </div>
+                        <h3 className="font-medium">Top Claim Method</h3>
+                      </div>
+                      <p className="text-3xl font-bold">{analyticsData.topClaimMethod?.method || 'None'}</p>
+                      <p className="text-sm text-neutral-500 mt-1">
+                        {analyticsData.topClaimMethod?.count || 0} claims
+                        {analyticsData.topClaimMethod?.percentage
+                          ? ` (${analyticsData.topClaimMethod.percentage}%)`
+                          : ''}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Analytics tabs */}
+                  <div className="mt-8">
+                    <div className="border-b border-neutral-200 mb-6">
+                      <div className="flex space-x-6">
+                        <button 
+                          className="px-1 py-2 border-b-2 border-blue-600 text-blue-600 font-medium text-sm"
+                          onClick={() => {}}
+                        >
+                          Claims Over Time
+                        </button>
+                        <button 
+                          className="px-1 py-2 border-b-2 border-transparent hover:text-neutral-900 text-neutral-600 font-medium text-sm"
+                          onClick={() => {}}
+                        >
+                          Claim Methods
+                        </button>
+                      </div>
+                    </div>
+                  
+                    {/* Bar Chart */}
+                    <div className="bg-white rounded-xl border border-neutral-200 p-6 mb-6 hover:shadow-sm transition-shadow">
+                      <div className="flex justify-between items-center mb-4">
+                        <h2 className="text-lg font-semibold flex items-center">
+                          <BarChart className="h-5 w-5 text-blue-600 mr-2" />
+                          Claims Over Time
+                        </h2>
+                      </div>
+
+                      {chartData.length > 0 ? (
+                        <div className="h-72">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <RechartsBarChart
+                              data={chartData}
+                              margin={{
+                                top: 5,
+                                right: 30,
+                                left: 20,
+                                bottom: 5,
+                              }}
+                            >
+                              <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.2} />
+                              <XAxis dataKey="date" tick={{ fontSize: 12 }} />
+                              <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
+                              <RechartsTooltip
+                                formatter={value => [`${value} claims`, 'Claims']}
+                                labelFormatter={label => `Date: ${label}`}
+                                contentStyle={{
+                                  borderRadius: '6px',
+                                  border: '1px solid #e2e8f0',
+                                  boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
+                                }}
+                              />
+                              <Bar dataKey="count" name="Claims" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                            </RechartsBarChart>
+                          </ResponsiveContainer>
+                        </div>
+                      ) : (
+                        <div className="h-64 bg-neutral-50 rounded-lg border border-neutral-200 flex items-center justify-center">
+                          <p className="text-neutral-500">No claim data available</p>
+                        </div>
+                      )}
+
+                      <p className="text-sm text-neutral-500 mt-4">
+                        This chart shows the number of claims per day over time.
+                      </p>
+                    </div>
+
+                    {/* Claims by method container */}
+                    {analyticsData.claimMethods.length > 0 ? (
+                      <div className="grid grid-cols-1 md:grid-cols-5 gap-6 mb-6">
+                        {/* Pie Chart */}
+                        <div className="md:col-span-2 bg-white rounded-xl border border-neutral-200 p-6 hover:shadow-sm transition-shadow">
+                          <h2 className="text-lg font-semibold mb-4 flex items-center">
+                            <PieChartIcon className="h-5 w-5 text-emerald-600 mr-2" />
+                            Claims by Method
+                          </h2>
+
+                          <div className="h-64">
+                            <ResponsiveContainer width="100%" height="100%">
+                              <PieChart>
+                                <Pie
+                                  data={analyticsData.claimMethods}
+                                  cx="50%"
+                                  cy="50%"
+                                  labelLine={false}
+                                  label={renderCustomizedLabel}
+                                  outerRadius={80}
+                                  innerRadius={40}
+                                  fill="#8884d8"
+                                  dataKey="count"
+                                  nameKey="method"
+                                >
+                                  {analyticsData.claimMethods.map((entry, index) => (
+                                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                  ))}
+                                </Pie>
+                                <RechartsTooltip
+                                  formatter={value => [`${value} claims`, 'Claims']}
+                                  contentStyle={{
+                                    borderRadius: '6px',
+                                    border: '1px solid #e2e8f0',
+                                    boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
+                                  }}
+                                />
+                                <Legend
+                                  formatter={(value, entry, index) => (
+                                    <span style={{ color: '#4b5563' }}>{value}</span>
+                                  )}
+                                />
+                              </PieChart>
+                            </ResponsiveContainer>
+                          </div>
+                        </div>
+
+                        {/* Claims by method table */}
+                        <div className="md:col-span-3 bg-white rounded-xl border border-neutral-200 p-6 hover:shadow-sm transition-shadow">
+                          <h2 className="text-lg font-semibold mb-4">Method Details</h2>
+
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-sm">
+                              <thead>
+                                <tr className="bg-neutral-50 border-b border-neutral-200">
+                                  <th className="px-4 py-2 text-left font-medium">Method</th>
+                                  <th className="px-4 py-2 text-right font-medium">Claims</th>
+                                  <th className="px-4 py-2 text-right font-medium">Percentage</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {analyticsData.claimMethods.map((method, index) => (
+                                  <tr key={index} className="border-b border-neutral-100 hover:bg-neutral-50">
+                                    <td className="px-4 py-3 flex items-center">
+                                      <div
+                                        className="w-3 h-3 mr-2 rounded-full"
+                                        style={{ backgroundColor: COLORS[index % COLORS.length] }}
+                                      />
+                                      {method.method}
+                                    </td>
+                                    <td className="px-4 py-3 text-right font-medium">{method.count}</td>
+                                    <td className="px-4 py-3 text-right">
+                                      {Math.round((method.count / analyticsData.totalClaims) * 100)}%
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="bg-white rounded-xl border border-neutral-200 p-6 text-center">
+                        <PieChartIcon className="h-8 w-8 text-neutral-400 mx-auto mb-4" />
+                        <h3 className="text-lg font-medium text-neutral-700 mb-2">No Claim Methods Data</h3>
+                        <p className="text-neutral-600 mb-2">
+                          Configure distribution methods and get claims to see analytics.
+                        </p>
+                        <Link href={`/poaps/${id}/distribution`} className="inline-block mt-2">
+                          <Button variant="outline" size="sm">
+                            Set Up Distribution
+                          </Button>
+                        </Link>
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </div>

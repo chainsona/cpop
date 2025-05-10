@@ -6,9 +6,9 @@ import { settingsSchema } from '@/lib/validations';
 type Params = Promise<{ id: string }>;
 
 // GET settings for a POAP
-export async function GET(req: NextRequest, context: { params: Params }) {
+export async function GET(request: Request, { params }: { params: Promise<Params > }) {
   try {
-    const { id } = await context.params;
+    const { id  } = await params;
 
     // Check if POAP exists
     const poap = await prisma.poap.findUnique({
@@ -38,10 +38,10 @@ export async function GET(req: NextRequest, context: { params: Params }) {
 }
 
 // POST to create settings
-export async function POST(req: NextRequest, context: { params: Params }) {
+export async function POST(request: Request, { params }: { params: Promise<Params > }) {
   try {
-    const { id } = await context.params;
-    const body = await req.json();
+    const { id  } = await params;
+    const body = await request.json();
 
     // Check if POAP exists
     const poap = await prisma.poap.findUnique({
@@ -119,10 +119,10 @@ export async function POST(req: NextRequest, context: { params: Params }) {
 }
 
 // PATCH to update settings
-export async function PATCH(req: NextRequest, context: { params: Params }) {
+export async function PATCH(request: Request, { params }: { params: Promise<Params > }) {
   try {
-    const { id } = await context.params;
-    const body = await req.json();
+    const { id  } = await params;
+    const body = await request.json();
 
     // Check if POAP exists
     const poap = await prisma.poap.findUnique({

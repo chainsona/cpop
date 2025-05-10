@@ -18,7 +18,6 @@ export function POAPTabNav({ poapId }: POAPTabNavProps) {
     { label: 'Token', href: `/poaps/${poapId}/token` },
     { label: 'Metadata', href: `/poaps/${poapId}/attributes` },
     { label: 'Settings', href: `/poaps/${poapId}/settings` },
-    { label: 'Analytics', href: `/poaps/${poapId}/analytics` },
   ];
 
   // Determine if a tab is active based on current path

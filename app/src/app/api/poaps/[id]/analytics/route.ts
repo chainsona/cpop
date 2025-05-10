@@ -4,9 +4,9 @@ import { prisma } from '@/lib/db';
 type Params = Promise<{ id: string }>;
 
 // GET analytics data for a POAP
-export async function GET(req: NextRequest, context: { params: Params }) {
+export async function GET(request: Request, { params }: { params: Promise<Params > }) {
   try {
-    const { id } = await context.params;
+    const { id  } = await params;
 
     // Check if POAP exists
     const poap = await prisma.poap.findUnique({
@@ -27,6 +27,7 @@ export async function GET(req: NextRequest, context: { params: Params }) {
         claimLinks: true,
         secretWord: true,
         locationBased: true,
+        airdrop: true,
       },
     });
 
@@ -74,25 +75,14 @@ export async function GET(req: NextRequest, context: { params: Params }) {
           }
         }
       } else if (method.type === 'LocationBased' && method.locationBased) {
-        methodClaims = method.locationBased.claimCount;
-        methodName = 'Location';
-
-        // Similar approach for location-based claims
-        const daysWithClaims = 5;
-        if (methodClaims > 0) {
-          const today = new Date();
-          const claimsPerDay = Math.ceil(methodClaims / daysWithClaims);
-          for (let i = 0; i < daysWithClaims; i++) {
-            const date = new Date(today);
-            date.setDate(date.getDate() - i - 1); // Offset by 1 more day from secret words
-            const dateStr = date.toISOString().split('T')[0];
-            claimsByDay[dateStr] =
-              (claimsByDay[dateStr] || 0) +
-              (i === daysWithClaims - 1
-                ? methodClaims - claimsPerDay * (daysWithClaims - 1)
-                : claimsPerDay);
-          }
-        }
+        methodName = `Location - ${method.locationBased.city}`;
+        methodClaims = method.locationBased.claimCount || 0;
+        totalClaims = method.locationBased.maxClaims || 0;
+      } else if (method.type === 'Airdrop' && method.airdrop) {
+        // For Airdrops, there's no claiming - tokens are directly minted to recipients
+        methodName = 'Airdrop';
+        methodClaims = method.airdrop.claimCount || 0;
+        totalClaims = method.airdrop.addresses?.length || 0;
       }
 
       if (methodClaims > 0) {
@@ -117,12 +107,15 @@ export async function GET(req: NextRequest, context: { params: Params }) {
     });
     availableClaims += claimLinksCount;
 
-    // Add max claims from secret words and location-based
+    // Add max claims from secret words, location-based, and airdrop
     for (const method of distributionMethods) {
       if (method.type === 'SecretWord' && method.secretWord?.maxClaims) {
         availableClaims += method.secretWord.maxClaims;
       } else if (method.type === 'LocationBased' && method.locationBased?.maxClaims) {
         availableClaims += method.locationBased.maxClaims;
+      } else if (method.type === 'Airdrop' && method.airdrop?.addresses) {
+        // For Airdrops, use the address count as the recipient count
+        availableClaims += method.airdrop.addresses.length;
       }
     }
 

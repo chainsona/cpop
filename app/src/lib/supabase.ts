@@ -44,6 +44,7 @@ export async function uploadImage(
     // Generate a unique filename
     const fileExt = file.name.split('.').pop();
     const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 15)}.${fileExt}`;
+    const filePath = `img/${fileName}`;
 
     onProgress?.(40);
 
@@ -55,7 +56,7 @@ export async function uploadImage(
       // Upload the file using admin client with service role key
       const { error: uploadError } = await supabaseAdmin.storage
         .from(STORAGE_BUCKET)
-        .upload(`img/${fileName}`, file, {
+        .upload(filePath, file, {
           cacheControl: '3600',
           upsert: false,
         });
@@ -69,7 +70,7 @@ export async function uploadImage(
       // Get the public URL for the uploaded file
       const { data: publicUrlData } = supabaseAdmin.storage
         .from(STORAGE_BUCKET)
-        .getPublicUrl(`img/${fileName}`);
+        .getPublicUrl(filePath);
 
       onProgress?.(100);
 
@@ -134,6 +135,7 @@ export async function uploadJsonMetadata(
     // Generate a unique filename if not provided
     const finalFilename =
       filename || `${Date.now()}-${Math.random().toString(36).substring(2, 15)}.json`;
+    const filePath = `json/${finalFilename}`;
 
     // Convert JSON to Blob
     const blob = new Blob([JSON.stringify(metadata, null, 2)], {
@@ -147,7 +149,7 @@ export async function uploadJsonMetadata(
     // Upload to Supabase Storage using admin client with service role key
     const { error: uploadError } = await supabaseAdmin.storage
       .from(STORAGE_BUCKET)
-      .upload(`json/${finalFilename}`, buffer, {
+      .upload(filePath, buffer, {
         contentType: 'application/json',
         cacheControl: '3600',
         upsert: false,
@@ -160,7 +162,7 @@ export async function uploadJsonMetadata(
     // Get the public URL for the uploaded file
     const { data: publicUrlData } = supabaseAdmin.storage
       .from(STORAGE_BUCKET)
-      .getPublicUrl(`json/${finalFilename}`);
+      .getPublicUrl(filePath);
 
     if (!publicUrlData.publicUrl) {
       throw new Error('Failed to get public URL for uploaded metadata');

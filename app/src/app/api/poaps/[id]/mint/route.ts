@@ -39,15 +39,15 @@ interface PoapData {
   [key: string]: any; // Allow additional properties
 }
 
-type Params = Promise<{
+type Params = {
   id: string;
-}>;
+};
 
 // POST handler for minting tokens
-async function mintHandler(req: NextRequest, { params }: { params: Params }) {
+async function mintHandler(request: Request, { params }: { params: Promise<Params> }) {
   try {
     // Check for Solana wallet auth first
-    const walletAddress = (req as any).wallet?.address;
+    const walletAddress = (request as any).wallet?.address;
 
     // Try NextAuth session as fallback
     const session = await getServerSession(authOptions);
@@ -145,6 +145,11 @@ async function mintHandler(req: NextRequest, { params }: { params: Params }) {
           where: { distributionMethodId: method.id },
         });
         totalSupply += locationBased?.maxClaims || 0; // Default to 0 if no max
+      } else if (method.type === 'Airdrop') {
+        const airdrop = await prisma.airdrop.findUnique({
+          where: { distributionMethodId: method.id },
+        });
+        totalSupply += airdrop?.addresses?.length || 0; // Use the number of addresses
       }
     }
 
@@ -188,11 +193,11 @@ async function mintHandler(req: NextRequest, { params }: { params: Params }) {
 }
 
 // Export the handler wrapped with API middleware
-export const POST = (req: NextRequest, ctx: { params: Params }) =>
-  apiMiddleware(req, async () => mintHandler(req, ctx));
+export const POST = (request: NextRequest, ctx: { params: Promise<Params> }) =>
+  apiMiddleware(request, async () => mintHandler(request as Request, ctx));
 
-// Function to mint compressed tokens - export for direct usage in server components
-export async function mintCompressedTokens(poap: PoapData, amount: number): Promise<string> {
+// Function to mint compressed tokens - internal implementation
+async function mintCompressedTokens(poap: PoapData, amount: number): Promise<string> {
   if (!RPC_ENDPOINT) {
     throw new Error('Missing Solana RPC endpoint configuration');
   }

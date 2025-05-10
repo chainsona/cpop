@@ -10,14 +10,15 @@ interface ConfigStatusCardProps {
   icon: React.ReactNode;
   href: string;
   summary: string;
+  className?: string;
 }
 
-export function ConfigStatusCard({ title, status, icon, href, summary }: ConfigStatusCardProps) {
+export function ConfigStatusCard({ title, status, icon, href, summary, className }: ConfigStatusCardProps) {
   return (
-    <Link href={href} className="block">
+    <Link href={href} className={cn("block", className)}>
       <div
         className={cn(
-          'border rounded-lg p-4 transition-all hover:shadow-sm',
+          'border rounded-lg p-4 transition-all hover:shadow-sm h-full flex flex-col',
           status === 'complete'
             ? 'border-green-200 bg-green-50'
             : status === 'partial'
@@ -58,7 +59,7 @@ export function ConfigStatusCard({ title, status, icon, href, summary }: ConfigS
           </div>
         </div>
         <p className="mt-2 text-sm text-neutral-600">{summary}</p>
-        <div className="flex items-center gap-1 mt-2 text-sm font-medium text-blue-600">
+        <div className="flex items-center gap-1 mt-auto pt-2 text-sm font-medium text-blue-600">
           <span>{status === 'complete' ? 'View' : 'Configure'}</span>
           <ChevronRight className="h-4 w-4" />
         </div>

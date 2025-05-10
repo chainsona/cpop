@@ -5,9 +5,9 @@ import { updatePoapStatusBasedOnDistributionMethods } from '@/lib/poap-utils';
 type Params = Promise<{ id: string; methodId: string }>;
 
 // GET a specific distribution method
-export async function GET(req: NextRequest, context: { params: Params }) {
+export async function GET(request: Request, { params }: { params: Promise<Params > }) {
   try {
-    const { id, methodId } = await context.params;
+    const { id, methodId  } = await params;
 
     // Check if POAP exists
     const poap = await prisma.poap.findUnique({
@@ -29,6 +29,7 @@ export async function GET(req: NextRequest, context: { params: Params }) {
         claimLinks: true,
         secretWord: true,
         locationBased: true,
+        airdrop: true,
       },
     });
 
@@ -50,10 +51,10 @@ export async function GET(req: NextRequest, context: { params: Params }) {
 }
 
 // PATCH to update a distribution method (e.g., to enable/disable it)
-export async function PATCH(req: NextRequest, context: { params: Params }) {
+export async function PATCH(request: Request, { params }: { params: Promise<Params > }) {
   try {
-    const { id, methodId } = await context.params;
-    const body = await req.json();
+    const { id, methodId  } = await params;
+    const body = await request.json();
 
     // Check if POAP exists
     const poap = await prisma.poap.findUnique({
@@ -64,17 +65,30 @@ export async function PATCH(req: NextRequest, context: { params: Params }) {
       return NextResponse.json({ error: 'POAP not found' }, { status: 404 });
     }
 
-    // Check if the distribution method exists and belongs to this POAP
+    // Get the distribution method with airdrop relation
     const distributionMethod = await prisma.distributionMethod.findUnique({
       where: {
         id: methodId,
         poapId: id,
         deleted: false, // Don't update deleted methods
       },
+      include: {
+        airdrop: true
+      }
     });
 
     if (!distributionMethod) {
       return NextResponse.json({ error: 'Distribution method not found' }, { status: 404 });
+    }
+
+    // For Airdrop distribution, check if it can be modified based on start date
+    if (distributionMethod.type === 'Airdrop' && distributionMethod.airdrop) {
+      const startDate = distributionMethod.airdrop.startDate;
+      if (startDate && new Date(startDate) <= new Date()) {
+        return NextResponse.json({ 
+          error: 'Airdrop distribution cannot be modified after its start date' 
+        }, { status: 403 });
+      }
     }
 
     // Update the distribution method
@@ -88,6 +102,7 @@ export async function PATCH(req: NextRequest, context: { params: Params }) {
         claimLinks: true,
         secretWord: true,
         locationBased: true,
+        airdrop: true,
       },
     });
 
@@ -125,9 +140,9 @@ export async function PATCH(req: NextRequest, context: { params: Params }) {
 }
 
 // DELETE a specific distribution method (now sets deleted flag instead of disabling)
-export async function DELETE(req: NextRequest, context: { params: Params }) {
+export async function DELETE(request: Request, { params }: { params: Promise<Params > }) {
   try {
-    const { id, methodId } = await context.params;
+    const { id, methodId  } = await params;
 
     // Check if POAP exists
     const poap = await prisma.poap.findUnique({
@@ -138,17 +153,30 @@ export async function DELETE(req: NextRequest, context: { params: Params }) {
       return NextResponse.json({ error: 'POAP not found' }, { status: 404 });
     }
 
-    // Check if the distribution method exists and belongs to this POAP
+    // Get the distribution method with airdrop relation
     const distributionMethod = await prisma.distributionMethod.findUnique({
       where: {
         id: methodId,
         poapId: id,
         deleted: false, // Don't delete already deleted methods
       },
+      include: {
+        airdrop: true
+      }
     });
 
     if (!distributionMethod) {
       return NextResponse.json({ error: 'Distribution method not found' }, { status: 404 });
+    }
+
+    // For Airdrop distribution, check if it can be deleted based on start date
+    if (distributionMethod.type === 'Airdrop' && distributionMethod.airdrop) {
+      const startDate = distributionMethod.airdrop.startDate;
+      if (startDate && new Date(startDate) <= new Date()) {
+        return NextResponse.json({ 
+          error: 'Airdrop distribution cannot be deleted after its start date' 
+        }, { status: 403 });
+      }
     }
 
     // Instead of deleting, mark it as deleted

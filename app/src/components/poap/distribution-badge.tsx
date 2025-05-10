@@ -1,6 +1,14 @@
 'use client';
 
-import { Link as LinkIcon, LockKeyhole, MapPin, HelpCircle } from 'lucide-react';
+import {
+  Link2,
+  LockKeyhole,
+  MapPin,
+  HelpCircle,
+  Plane,
+  KeyRound,
+  Coins,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { DistributionMethod, DistributionType } from '@/types/poap';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -46,36 +54,45 @@ export function DistributionBadge({ type, method, className }: DistributionBadge
     switch (type) {
       case 'ClaimLinks':
         return {
-          icon: <LinkIcon className="h-3 w-3" />,
+          icon: <Link2 className="h-3.5 w-3.5" />,
           label: 'Claim Links',
-          color: 'bg-blue-100 text-blue-800 border-blue-200',
+          color: 'border-blue-100 text-blue-900 bg-blue-50',
           description: method?.claimLinks?.length
             ? `${method.claimLinks.length} unique claim links${countInfo ? `, ${method.claimLinks.filter(l => l.claimed).length} claimed` : ''}`
             : 'Distributed via unique claim links',
         };
       case 'SecretWord':
         return {
-          icon: <LockKeyhole className="h-3 w-3" />,
+          icon: <KeyRound className="h-3.5 w-3.5" />,
           label: 'Secret Word',
-          color: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+          color: 'border-green-100 text-green-900 bg-green-50',
           description: method?.secretWord
             ? `${method.secretWord.claimCount} claims${method.secretWord.maxClaims ? ` out of max ${method.secretWord.maxClaims}` : ''}`
             : 'Claimed using a secret word',
         };
       case 'LocationBased':
         return {
-          icon: <MapPin className="h-3 w-3" />,
+          icon: <MapPin className="h-3.5 w-3.5" />,
           label: 'Location',
-          color: 'bg-orange-100 text-orange-800 border-orange-200',
+          color: 'border-orange-100 text-orange-900 bg-orange-50',
           description: method?.locationBased
             ? `${method.locationBased.city}: ${method.locationBased.claimCount} claims${method.locationBased.maxClaims ? ` out of max ${method.locationBased.maxClaims}` : ''}`
             : 'Available at a specific location',
         };
+      case 'Airdrop':
+        return {
+          icon: <Plane className="h-3.5 w-3.5" />,
+          label: 'Airdrop',
+          color: 'border-purple-100 text-purple-900 bg-purple-50',
+          description: method?.airdrop
+            ? `${method.airdrop.addresses?.length || 0} addresses${method.airdrop.maxClaims ? `, ${method.airdrop.claimCount} of ${method.airdrop.maxClaims} claimed` : ''}`
+            : 'Direct distribution to wallet addresses',
+        };
       default:
         return {
-          icon: <HelpCircle className="h-3 w-3" />,
-          label: 'Other',
-          color: 'bg-neutral-100 text-neutral-800 border-neutral-200',
+          icon: <Coins className="h-3.5 w-3.5" />,
+          label: 'Unknown',
+          color: 'border-neutral-100 text-neutral-900 bg-neutral-50',
           description: 'Other distribution method',
         };
     }

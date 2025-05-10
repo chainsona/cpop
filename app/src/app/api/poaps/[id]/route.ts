@@ -88,9 +88,9 @@ async function checkUserAuthorization(
 }
 
 // Get a single POAP by ID
-async function getHandler(req: NextRequest, context: { params: Params }) {
+async function getHandler(request: Request, { params }: { params: Promise<Params > }) {
   try {
-    const { id } = await context.params;
+    const { id  } = await params;
 
     // Fetch POAP from database
     const poap = await prisma.poap.findUnique({
@@ -112,7 +112,7 @@ async function getHandler(req: NextRequest, context: { params: Params }) {
     }
 
     // Check if user is authorized to view this POAP
-    const { authorized } = await checkUserAuthorization(req, id);
+    const { authorized } = await checkUserAuthorization(request as unknown as NextRequest, id);
 
     // If POAP is not public and user is not authorized, deny access
     if (!authorized && poap.settings?.visibility !== 'Public') {
@@ -166,12 +166,12 @@ async function getHandler(req: NextRequest, context: { params: Params }) {
 }
 
 // Update a POAP by ID
-async function putHandler(req: NextRequest, context: { params: Params }) {
+async function putHandler(request: Request, { params }: { params: Promise<Params > }) {
   try {
-    const { id } = await context.params;
+    const { id  } = await params;
 
     // Check authorization
-    const { authorized } = await checkUserAuthorization(req, id);
+    const { authorized } = await checkUserAuthorization(request as unknown as NextRequest, id);
 
     if (!authorized) {
       return NextResponse.json(
@@ -190,7 +190,7 @@ async function putHandler(req: NextRequest, context: { params: Params }) {
     }
 
     // Parse the request body
-    const body = await req.json();
+    const body = await request.json();
 
     try {
       // Validate against our schema
@@ -244,12 +244,12 @@ async function putHandler(req: NextRequest, context: { params: Params }) {
 }
 
 // Delete a POAP by ID
-async function deleteHandler(req: NextRequest, context: { params: Params }) {
+async function deleteHandler(request: Request, { params }: { params: Promise<Params > }) {
   try {
-    const { id } = await context.params;
+    const { id  } = await params;
 
     // Check authorization
-    const { authorized } = await checkUserAuthorization(req, id);
+    const { authorized } = await checkUserAuthorization(request as unknown as NextRequest, id);
 
     if (!authorized) {
       return NextResponse.json(
@@ -290,11 +290,11 @@ async function deleteHandler(req: NextRequest, context: { params: Params }) {
 }
 
 // Export wrapped handlers with auth middleware
-export const GET = (req: NextRequest, ctx: { params: Params }) =>
-  apiMiddleware(req, async () => getHandler(req, ctx));
+export const GET = (request: NextRequest, ctx: { params: Promise<Params> }) =>
+  apiMiddleware(request, async () => getHandler(request as Request, ctx));
 
-export const PUT = (req: NextRequest, ctx: { params: Params }) =>
-  apiMiddleware(req, async () => putHandler(req, ctx));
+export const PUT = (request: NextRequest, ctx: { params: Promise<Params> }) =>
+  apiMiddleware(request, async () => putHandler(request as Request, ctx));
 
-export const DELETE = (req: NextRequest, ctx: { params: Params }) =>
-  apiMiddleware(req, async () => deleteHandler(req, ctx));
+export const DELETE = (request: NextRequest, ctx: { params: Promise<Params> }) =>
+  apiMiddleware(request, async () => deleteHandler(request as Request, ctx));

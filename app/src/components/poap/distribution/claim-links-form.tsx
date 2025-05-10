@@ -170,7 +170,7 @@ export function ClaimLinksForm({ id, onSuccess }: ClaimLinksFormProps) {
           <p className="text-neutral-600">Each link is unique and can only be used once.</p>
 
           <div className="max-w-xs">
-            <Label htmlFor="amount">Number of links</Label>
+            <Label htmlFor="amount">Number of links <span className="text-red-500">*</span></Label>
             <Input
               id="amount"
               type="number"

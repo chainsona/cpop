@@ -3,7 +3,7 @@
 import { ArrowLeft, Copy, ExternalLink, QrCode, RefreshCcw } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { usePathname } from 'next/navigation';
 import { POAPTabNav } from '@/components/poap/poap-tab-nav';
 import { Coins } from 'lucide-react';
@@ -54,22 +54,33 @@ export default function POAPTokenPage() {
 
   const [tokenData, setTokenData] = useState<TokenResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isCopied, setIsCopied] = useState(false);
   const [showDebug, setShowDebug] = useState(false);
+  const [hasDistributionMethods, setHasDistributionMethods] = useState(false);
+  const [isPolling, setIsPolling] = useState(false);
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const mintTimeRef = useRef<number | null>(null);
 
-  const fetchTokenData = async () => {
+  // Enhanced token data fetching with refresh capability
+  const fetchTokenData = useCallback(async (showLoadingState = true, isRefreshOp = false) => {
     try {
+      if (showLoadingState) {
+        if (isRefreshOp) {
+          setIsRefreshing(true);
+        } else {
       setIsLoading(true);
+        }
+      }
+      
       setError(null);
 
-      console.log('[Token Debug] Starting token data fetch');
-
-      // Ensure we're authenticated before fetching token data
+      // Don't attempt fetch if not authenticated
       if (!isAuthenticated) {
-        console.log('[Token Debug] User not authenticated, prompting login');
         setError('Unauthorized');
         setIsLoading(false);
+        setIsRefreshing(false);
         return;
       }
 
@@ -80,89 +91,221 @@ export default function POAPTokenPage() {
       // Create headers with Solana auth token if available
       const headers: HeadersInit = {};
       if (solanaToken) {
-        // Use the exact format expected by solana-auth.ts middleware
         headers['Authorization'] = `Solana ${solanaToken}`;
-        console.log('[Token Debug] Using Solana auth token from localStorage');
-
-        // Log token details for debugging
-        try {
-          const parsedToken = JSON.parse(Buffer.from(solanaToken, 'base64').toString());
-          console.log('[Token Debug] Token validity check:', {
-            hasMessage: !!parsedToken.message,
-            hasSignature: !!parsedToken.signature,
-            address: parsedToken.message?.address?.substring(0, 10) + '...',
-          });
-        } catch (e) {
-          console.error('[Token Debug] Error parsing auth token:', e);
-        }
-      } else {
-        console.log('[Token Debug] No Solana auth token found in localStorage');
       }
 
-      console.log('[Token Debug] Making API request with auth header');
-
-      // Use the same API fetch pattern as in the mint function
-      const response = await fetch(`/api/poaps/${id}/token`, {
+      // Add cache-busting parameter to ensure fresh data
+      const cacheBuster = Date.now();
+      const response = await fetch(`/api/poaps/${id}/token?_=${cacheBuster}`, {
         headers,
       });
 
-      console.log('[Token Debug] API response status:', response.status);
-
       if (!response.ok) {
         const errorData = await response.json();
-        console.log('[Token Debug] API error response:', errorData);
-
-        // Special handling for 401 Unauthorized errors
         if (response.status === 401) {
-          console.log('[Token Debug] API returned unauthorized');
           setError('Unauthorized');
         } else {
           throw new Error(errorData.error || 'Failed to fetch token data');
         }
       } else {
         const data = await response.json();
-        console.log('[Token Debug] API successful response with data');
+        // Check if data has actually changed before updating state
+        if (JSON.stringify(data) !== JSON.stringify(tokenData)) {
         setTokenData(data);
+        }
       }
     } catch (err) {
-      console.error('[Token Debug] Error fetching token data:', err);
+      console.error('Error fetching token data:', err);
+      // Only set error if not a refresh operation
+      if (!isRefreshOp) {
       setError(err instanceof Error ? err.message : 'Failed to load token data');
+      }
     } finally {
+      if (showLoadingState) {
       setIsLoading(false);
+        setIsRefreshing(false);
     }
-  };
+    }
+  }, [id, isAuthenticated, tokenData]);
 
-  useEffect(() => {
-    fetchTokenData();
+  // Wrapper for onClick handler compatibility
+  const fetchTokenDataHandler = useCallback(() => {
+    fetchTokenData(true, false);
+  }, [fetchTokenData]);
+  
+  // Wrapper for Try Again button in error state
+  const tryAgainHandler = useCallback(() => {
+    fetchTokenData(true, false);
+  }, [fetchTokenData]);
+
+  // Fetch distribution methods
+  const fetchDistributionMethods = useCallback(async () => {
+    try {
+      const response = await fetch(`/api/poaps/${id}/distribution`);
+      
+      if (response.ok) {
+        const data = await response.json();
+        // Check if there are any active (non-disabled) distribution methods
+        const activeMethods = (data.distributionMethods || []).filter(
+          (method: any) => !method.disabled
+        );
+        setHasDistributionMethods(activeMethods.length > 0);
+      }
+    } catch (error) {
+      console.error('Error fetching distribution methods:', error);
+    }
   }, [id]);
 
-  // Add effect to handle authentication state changes
+  // Start polling for token updates
+  const startPolling = useCallback(() => {
+    // Only start polling if there isn't already a polling interval
+    if (!pollingIntervalRef.current) {
+      setIsPolling(true);
+      
+      // Start with more frequent checks right after a mint operation
+      const isMintRecent = mintTimeRef.current && (Date.now() - mintTimeRef.current < 10000);
+      const initialInterval = isMintRecent ? 2000 : 5000;
+      
+      pollingIntervalRef.current = setInterval(() => {
+        const timeSinceMint = mintTimeRef.current ? Date.now() - mintTimeRef.current : Infinity;
+        
+        // More aggressive polling right after mint, then reduce frequency
+        if (timeSinceMint < 10000) {
+          fetchTokenData(false, true); // Silent refresh
+        } else if (timeSinceMint < 30000) {
+          // After 10 seconds, check less frequently
+          if (pollingIntervalRef.current) {
+            clearInterval(pollingIntervalRef.current);
+            pollingIntervalRef.current = setInterval(() => {
+              fetchTokenData(false, true); // Silent refresh
+            }, 5000);
+          }
+        } else {
+          // After 30 seconds, stop polling
+          stopPolling();
+        }
+      }, initialInterval);
+    }
+  }, [fetchTokenData]);
+
+  // Stop polling
+  const stopPolling = useCallback(() => {
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current);
+      pollingIntervalRef.current = null;
+      setIsPolling(false);
+    }
+  }, []);
+
+  // Clean up interval on unmount
+  useEffect(() => {
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+      }
+    };
+  }, []);
+
+  // Initial data load
+  useEffect(() => {
+    fetchTokenData();
+    fetchDistributionMethods();
+  }, [id, fetchTokenData, fetchDistributionMethods]);
+
+  // Handle authentication state changes
   useEffect(() => {
     if (isAuthenticated) {
-      // If authenticated, fetch token data
       fetchTokenData();
     } else if (error === 'Unauthorized') {
-      // If we have an unauthorized error, attempt to authenticate
-      console.log('Attempting to authenticate due to unauthorized error');
       authenticate().then(success => {
         if (success) {
-          // Clear error and fetch data on successful authentication
           setError(null);
           fetchTokenData();
         }
       });
     }
-  }, [isAuthenticated, error, id]);
+  }, [isAuthenticated, error, id, authenticate, fetchTokenData]);
 
-  // Add useEffect to log auth state changes
-  useEffect(() => {
-    console.log('[Auth Debug] Authentication state changed:', {
-      isConnected,
-      isAuthenticated,
-      hasLocalToken: typeof window !== 'undefined' && !!localStorage.getItem('solana_auth_token'),
-      error,
-    });
-  }, [isConnected, isAuthenticated, error]);
+  // Enhanced mint tokens function with proper refresh
+  const handleMintTokens = async (newSupply: number) => {
+    try {
+      setIsLoading(true);
+      
+      // Ensure we're authenticated before minting tokens
+      if (!isAuthenticated) {
+        toast.error('Authentication required to mint tokens');
+        const success = await authenticate();
+        if (!success) {
+          setIsLoading(false);
+          return;
+        }
+      }
+
+      // Get the Solana auth token exactly as stored by the wallet context
+      const solanaToken =
+        typeof window !== 'undefined' ? localStorage.getItem('solana_auth_token') : null;
+
+      if (!solanaToken) {
+        toast.error('Authentication token not found. Please log in again.');
+        setIsLoading(false);
+        return;
+      }
+
+      // Make API call to mint tokens
+      const response = await fetch(`/api/poaps/${id}/mint`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Solana ${solanaToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        if (response.status === 401) {
+          toast.error('Authentication failed. Please log in again.');
+          await authenticate();
+        } else {
+          throw new Error(errorData.error || 'Failed to mint tokens');
+        }
+      } else {
+        const data = await response.json();
+
+        // Update UI optimistically
+        setTokenData(prevData => {
+          if (!prevData) return null;
+          return {
+            ...prevData,
+            tokenMinted: true,
+            tokenSupply: newSupply,
+          };
+        });
+
+        toast.success('Tokens minted successfully!');
+
+        // Record mint time for polling
+        mintTimeRef.current = Date.now();
+        
+        // Start polling for token updates
+        startPolling();
+        
+        // Fetch immediately as well
+        await fetchTokenData(false, true);
+      }
+    } catch (err) {
+      console.error('Error minting tokens:', err);
+      toast.error(err instanceof Error ? err.message : 'Failed to mint tokens. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Function for manual refresh with visual indication
+  const handleManualRefresh = useCallback(() => {
+    fetchTokenData(true, true)
+      .then(() => toast.success('Token information refreshed'))
+      .catch(() => {});
+  }, [fetchTokenData]);
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard
@@ -181,80 +324,6 @@ export default function POAPTokenPage() {
   // Format a number with commas
   const formatNumber = (num: number) => {
     return num.toLocaleString();
-  };
-
-  // Handler for the mint tokens action
-  const handleMintTokens = async (newSupply: number) => {
-    try {
-      // Ensure we're authenticated before minting tokens
-      if (!isAuthenticated) {
-        toast.error('Authentication required to mint tokens');
-        const success = await authenticate();
-        if (!success) {
-          return;
-        }
-      }
-
-      // Get the Solana auth token exactly as stored by the wallet context
-      const solanaToken =
-        typeof window !== 'undefined' ? localStorage.getItem('solana_auth_token') : null;
-
-      if (!solanaToken) {
-        console.error('[Mint Debug] No Solana auth token found');
-        toast.error('Authentication token not found. Please log in again.');
-        return;
-      }
-
-      console.log('[Mint Debug] Using Solana auth token for mint, length:', solanaToken.length);
-
-      // Make API call to mint tokens using the same auth format as in /lib/solana-auth.ts
-      const response = await fetch(`/api/poaps/${id}/mint`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Solana ${solanaToken}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      console.log('[Mint Debug] Mint API response status:', response.status);
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error('[Mint Debug] Mint API error:', errorData);
-
-        if (response.status === 401) {
-          toast.error('Authentication failed. Please log in again.');
-          // Try to re-authenticate on 401
-          await authenticate();
-        } else {
-          throw new Error(errorData.error || 'Failed to mint tokens');
-        }
-      } else {
-        const data = await response.json();
-        console.log('[Mint Debug] Mint successful:', data);
-
-        // Update UI after successful minting
-        setTokenData(prevData => {
-          if (!prevData) return null;
-          return {
-            ...prevData,
-            tokenMinted: true,
-            tokenSupply: newSupply,
-          };
-        });
-
-        toast.success('Tokens minted successfully!');
-
-        // Refresh data after a small delay to ensure server has updated
-        setTimeout(() => {
-          fetchTokenData();
-        }, 2000);
-      }
-    } catch (err) {
-      console.error('[Mint Debug] Error minting tokens:', err);
-      toast.error(err instanceof Error ? err.message : 'Failed to mint tokens. Please try again.');
-      fetchTokenData(); // Refresh to get accurate data
-    }
   };
 
   // Helper function to render external links
@@ -487,7 +556,7 @@ export default function POAPTokenPage() {
             <Button
               variant="outline"
               className="w-full sm:w-auto"
-              onClick={fetchTokenData}
+              onClick={fetchTokenDataHandler}
               disabled={isLoading}
             >
               Try Again
@@ -533,7 +602,7 @@ export default function POAPTokenPage() {
     return (
       <div className="bg-red-50 border border-red-200 rounded-xl p-6 text-center">
         <p className="text-red-700 mb-4">{error}</p>
-        <Button onClick={fetchTokenData}>Try Again</Button>
+        <Button onClick={tryAgainHandler}>Try Again</Button>
       </div>
     );
   };
@@ -561,16 +630,24 @@ export default function POAPTokenPage() {
 
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-2xl font-bold">Token Management</h2>
+          <div className="flex items-center gap-2">
+            {isPolling && (
+              <div className="text-xs text-neutral-500 flex items-center">
+                <RefreshCcw className="h-3 w-3 animate-spin mr-1" />
+                Syncing...
+              </div>
+            )}
           <Button
             variant="outline"
             size="sm"
             className="gap-1.5"
-            onClick={fetchTokenData}
-            disabled={isLoading}
+              onClick={handleManualRefresh}
+              disabled={isLoading || isRefreshing}
           >
-            <RefreshCcw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+              <RefreshCcw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
             Refresh
           </Button>
+          </div>
         </div>
 
         {/* Show token status alert if no tokens have been minted */}
@@ -581,7 +658,7 @@ export default function POAPTokenPage() {
               supply: tokenData.tokenSupply || 0,
             }}
             poapId={id}
-            hasDistributionMethods={true}
+            hasDistributionMethods={hasDistributionMethods}
             onTokensMinted={handleMintTokens}
           />
         )}
@@ -610,6 +687,7 @@ export default function POAPTokenPage() {
                   Set Up Distribution
                 </Button>
               </Link>
+              {hasDistributionMethods && (
               <Button
                 className="gap-1.5 w-full sm:w-auto bg-amber-600 text-white hover:bg-amber-700"
                 onClick={() => {
@@ -622,6 +700,7 @@ export default function POAPTokenPage() {
                 <Coins className="h-4 w-4" />
                 Mint POAP Token
               </Button>
+              )}
             </div>
           </div>
         ) : (
