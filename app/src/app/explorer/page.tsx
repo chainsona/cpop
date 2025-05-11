@@ -5,16 +5,14 @@ import { Sparkles } from 'lucide-react';
 import { EmptyState } from '@/components/poap/empty-state';
 import { POAPCard } from '@/components/poap/poap-card';
 import { PoapItem } from '@/types/poap';
-import { useWalletContext } from '@/contexts/wallet-context';
-import { ConnectWallet } from '@/components/wallet/connect-wallet';
 import { Container } from '@/components/ui/container';
-import { PageHeader } from '@/components/ui/page-header';
+import { PageTitle } from '@/components/ui/page-title';
 
 export default function ExplorerPage() {
   const [poaps, setPoaps] = useState<PoapItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { isConnected, isAuthenticated } = useWalletContext();
+  const [debugInfo, setDebugInfo] = useState<string | null>(null);
 
   useEffect(() => {
     async function fetchPoaps() {
@@ -25,9 +23,10 @@ export default function ExplorerPage() {
         const port = process.env.NODE_ENV === 'development' ? window.location.port : '';
         const baseUrl = `${window.location.protocol}//${window.location.hostname}${port ? ':' + port : ''}`;
 
-        console.log(`Fetching POAPs from: ${baseUrl}/api/poaps`);
+        const apiUrl = `${baseUrl}/api/poaps/public`;
+        console.log(`Fetching public POAPs from: ${apiUrl}`);
 
-        const response = await fetch(`${baseUrl}/api/poaps`, {
+        const response = await fetch(apiUrl, {
           cache: 'no-store',
           headers: {
             'Content-Type': 'application/json',
@@ -36,17 +35,30 @@ export default function ExplorerPage() {
 
         if (!response.ok) {
           const errorData = await response.json().catch(() => null);
-          console.error('Failed to fetch POAPs:', response.status, errorData);
-          throw new Error(`Failed to fetch POAPs: ${response.status}`);
+          console.error('Failed to fetch public POAPs:', response.status, errorData);
+          throw new Error(`Failed to fetch public POAPs: ${response.status}`);
         }
 
         const data = await response.json();
         console.log('Received data:', data);
-
-        setPoaps(data.poaps || []);
+        
+        if (!data.poaps || !Array.isArray(data.poaps)) {
+          console.error('Unexpected response format:', data);
+          setDebugInfo(`Unexpected response format: ${JSON.stringify(data, null, 2)}`);
+          setPoaps([]);
+        } else {
+          setPoaps(data.poaps);
+          setDebugInfo(
+            `Found ${data.poaps.length} POAPs. ` + 
+            (data.poaps.length > 0 
+              ? `First POAP: ${data.poaps[0].title} (${data.poaps[0].status})`
+              : 'No POAPs in response.')
+          );
+        }
       } catch (err) {
-        console.error('Error fetching POAPs:', err);
-        setError('Failed to load POAPs');
+        console.error('Error fetching public POAPs:', err);
+        setError('Failed to load public POAPs');
+        setDebugInfo(`Error: ${err instanceof Error ? err.message : String(err)}`);
       } finally {
         setIsLoading(false);
       }
@@ -58,7 +70,7 @@ export default function ExplorerPage() {
   return (
     <Container>
       <div className="py-10">
-        <PageHeader
+        <PageTitle
           title="Explorer"
           subtitle={
             <div className="flex items-center">
@@ -80,12 +92,25 @@ export default function ExplorerPage() {
         {error && !isLoading && (
           <div className="bg-red-50 border border-red-200 rounded-xl p-6 text-center mb-8">
             <p className="text-red-700">{error}</p>
+            {debugInfo && process.env.NODE_ENV === 'development' && (
+              <pre className="mt-2 text-xs text-left bg-neutral-100 p-2 rounded overflow-auto">
+                {debugInfo}
+              </pre>
+            )}
           </div>
         )}
 
         {/* Empty state */}
         {!isLoading && poaps.length === 0 && !error && (
-          <EmptyState message="No public POAPs to explore yet" />
+          <div>
+            <EmptyState message="No public POAPs to explore yet" />
+            {debugInfo && process.env.NODE_ENV === 'development' && (
+              <div className="mt-4 text-xs text-neutral-500 bg-neutral-100 p-4 rounded-lg">
+                <h3 className="font-semibold">Debug Info:</h3>
+                <pre className="overflow-auto whitespace-pre-wrap">{debugInfo}</pre>
+              </div>
+            )}
+          </div>
         )}
 
         {/* Results */}

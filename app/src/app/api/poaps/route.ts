@@ -160,32 +160,42 @@ async function getHandler(request: NextRequest) {
     // For wallet-based auth, get wallet from request
     const walletAddress = (request as any).wallet?.address;
     
+    // Require authentication for all POAP requests
+    if (!userId && !walletAddress) {
+      // Always return unauthorized for unauthenticated requests
+      return NextResponse.json(
+        { error: 'Unauthorized: Please connect your wallet or sign in' },
+        { status: 401 }
+      );
+    }
+    
     // Build the query based on authentication
     const where: any = {};
     
     if (userId) {
-      // If authenticated with NextAuth, filter by creator ID
+      // If authenticated with NextAuth, strictly filter by creator ID
       where.creatorId = userId;
+      
+      console.log(`Fetching POAPs created by user with id: ${userId}`);
     } else if (walletAddress) {
       // If authenticated with wallet, find the user by wallet address
       const user = await prisma.user.findUnique({
         where: { walletAddress },
+        select: { id: true } // Only get the id to reduce data transfer
       });
       
       if (user) {
+        // Strictly filter by creator ID from the wallet user
         where.creatorId = user.id;
+        console.log(`Fetching POAPs created by wallet user with id: ${user.id}`);
       } else {
         // If no user found with this wallet, return empty list
+        console.log(`No user found for wallet address: ${walletAddress}`);
         return NextResponse.json({ poaps: [] });
       }
-    } else {
-      // If not authenticated, only show public POAPs
-      where.settings = {
-        visibility: 'Public',
-      };
     }
     
-    // Fetch POAPs with the constructed filter but without including creator directly
+    // Fetch POAPs with the constructed filter - only the user's own POAPs
     const poaps = await prisma.poap.findMany({
       where,
       orderBy: { createdAt: 'desc' },
@@ -193,6 +203,8 @@ async function getHandler(request: NextRequest) {
         settings: true
       }
     });
+
+    console.log(`Found ${poaps.length} POAPs for the authenticated user`);
 
     // If we have poaps and need creator information, fetch it separately
     if (poaps.length > 0) {

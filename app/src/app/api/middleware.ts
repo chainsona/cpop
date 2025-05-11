@@ -16,12 +16,12 @@ export async function apiMiddleware(
       '/api/webhook',
       '/api/poaps/[id]/public',
       '/api/poaps/[id]/attributes/public',
+      '/api/poaps/public',
       '/api/test',
     ];
     
-    // Also allow GET requests to /api/poaps for public POAPs
-    if ((url === '/api/poaps' && method === 'GET') || 
-        publicRoutes.some(route => url.includes(route.replace('[id]', '')))) {
+    // Only allow explicitly marked public routes without authentication
+    if (publicRoutes.some(route => url.includes(route.replace('[id]', '')))) {
       return handler(req);
     }
     

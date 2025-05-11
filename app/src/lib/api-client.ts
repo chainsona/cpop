@@ -54,6 +54,13 @@ export async function fetchWithAuth(url: string, options: FetchOptions = {}): Pr
     } else {
       headers['Authorization'] = solanaToken;
     }
+    console.log('Adding auth token to request', { url, hasToken: !!solanaToken });
+  } else {
+    console.log('No auth token available for request', { url });
+    // For /api/poaps endpoint, set a special header to indicate it's from the My POAPs page
+    if (url.includes('/api/poaps') && !url.includes('/')) {
+      headers['X-POAP-View'] = 'MyPOAPs';
+    }
   }
 
   // Make the request with the auth headers
