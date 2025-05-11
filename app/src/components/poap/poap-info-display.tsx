@@ -1,4 +1,4 @@
-import { Hash, Calendar, Building, User, Coins, RefreshCcw } from 'lucide-react';
+import { Hash, Calendar, Building, User, Coins, RefreshCcw, Copy, ExternalLink } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { InteractiveExternalLink } from '@/components/ui/interactive-link';
@@ -26,6 +26,7 @@ interface POAPInfoDisplayProps {
   metadataOutdated: boolean;
   onMetadataUpdated: () => void;
   isAuthenticated: boolean;
+  isCreator?: boolean;
 }
 
 export function POAPInfoDisplay({
@@ -35,8 +36,15 @@ export function POAPInfoDisplay({
   metadataOutdated,
   onMetadataUpdated,
   isAuthenticated,
+  isCreator = false,
 }: POAPInfoDisplayProps) {
   const statusDisplay = getStatusDisplay(poap.status);
+  const cluster = process.env.NEXT_PUBLIC_SOLANA_CLUSTER || 'mainnet';
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    toast.success('Copied to clipboard');
+  };
 
   return (
     <div className="flex flex-col gap-5">
@@ -81,20 +89,22 @@ export function POAPInfoDisplay({
         </div>
       )}
 
-      {/* Status */}
-      <div className="flex items-start gap-3">
-        <div className={cn('h-5 w-5 flex-shrink-0 mt-0.5', statusDisplay.color)}>
-          {statusDisplay.icon}
+      {/* Status - visible only to creators */}
+      {isCreator && (
+        <div className="flex items-start gap-3">
+          <div className={cn('h-5 w-5 flex-shrink-0 mt-0.5', statusDisplay.color)}>
+            {statusDisplay.icon}
+          </div>
+          <div>
+            <div className="text-sm font-medium text-neutral-500 mb-1">Status</div>
+            <StatusBadge
+              className={cn(statusDisplay.borderColor, statusDisplay.bgColor, statusDisplay.color)}
+            >
+              {statusDisplay.label}
+            </StatusBadge>
+          </div>
         </div>
-        <div>
-          <div className="text-sm font-medium text-neutral-500 mb-1">Status</div>
-          <StatusBadge
-            className={cn(statusDisplay.borderColor, statusDisplay.bgColor, statusDisplay.color)}
-          >
-            {statusDisplay.label}
-          </StatusBadge>
-        </div>
-      </div>
+      )}
 
       {/* Token Information - visible only if authenticated */}
       {isAuthenticated && poap.token && (
@@ -102,12 +112,32 @@ export function POAPInfoDisplay({
           <Coins className="h-5 w-5 text-neutral-400 flex-shrink-0 mt-0.5" />
           <div>
             <div className="text-sm font-medium text-neutral-500 mb-1">Token</div>
-            <Link
-              href={`/poaps/${poap.id}/token`}
-              className="text-blue-600 hover:text-blue-700 hover:underline block text-sm truncate"
-            >
-              {poap.token.mintAddress}
-            </Link>
+            <div className="flex items-center gap-2">
+              <Link
+                href={`/poaps/${poap.id}/token`}
+                className="text-blue-600 hover:text-blue-700 hover:underline block text-sm max-w-[150px] overflow-hidden text-ellipsis whitespace-nowrap"
+              >
+                {poap.token?.mintAddress}
+              </Link>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="p-1 h-auto"
+                onClick={() => copyToClipboard(poap.token?.mintAddress || '')}
+                title="Copy to clipboard"
+              >
+                <Copy className="h-3.5 w-3.5" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="p-1 h-auto"
+                onClick={() => window.open(`https://explorer.solana.com/address/${poap.token?.mintAddress}?cluster=${cluster}`, '_blank')}
+                title="View on Solana Explorer"
+              >
+                <ExternalLink className="h-3.5 w-3.5" />
+              </Button>
+            </div>
             {metadataOutdated && (
               <div className="mt-2">
                 <Button

@@ -460,6 +460,7 @@ export default function POAPDetailPage() {
                 metadataOutdated={metadataOutdated}
                 onMetadataUpdated={handleMetadataUpdated}
                 isAuthenticated={isAuthenticated}
+                isCreator={!!isOwner}
               />
             </div>
           </div>

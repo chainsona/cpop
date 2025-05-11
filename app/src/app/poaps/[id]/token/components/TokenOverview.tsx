@@ -121,7 +121,7 @@ export const TokenOverview = ({
                 <div className="p-3 bg-neutral-50 rounded-md">
                   <p className="text-sm text-neutral-500 mb-1">Mint Address</p>
                   <div className="flex items-center gap-2">
-                    <code className="text-xs bg-neutral-100 p-1 rounded text-neutral-700 overflow-hidden overflow-ellipsis">
+                    <code className="text-xs bg-neutral-100 p-1 rounded text-neutral-700 overflow-hidden text-ellipsis whitespace-nowrap max-w-[180px]">
                       {token.mintAddress}
                     </code>
                     <Button
@@ -129,6 +129,7 @@ export const TokenOverview = ({
                       size="sm"
                       className="p-1 h-auto"
                       onClick={() => copyToClipboard(token.mintAddress)}
+                      title="Copy to clipboard"
                     >
                       <Copy className="h-3.5 w-3.5" />
                     </Button>
@@ -137,6 +138,7 @@ export const TokenOverview = ({
                       size="sm"
                       className="p-1 h-auto"
                       onClick={() => window.open(`https://explorer.solana.com/address/${token.mintAddress}?cluster=${cluster}`, '_blank')}
+                      title="View on Solana Explorer"
                     >
                       <ExternalLink className="h-3.5 w-3.5" />
                     </Button>
