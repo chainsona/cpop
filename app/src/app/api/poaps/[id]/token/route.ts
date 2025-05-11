@@ -65,8 +65,8 @@ async function getTokenHandler(req: NextRequest, { params }: { params: Params })
     // to get a estimate of claimed tokens or a placeholder for now
     const claimedCount = 0; // This will need to be updated based on the actual schema
 
-    // Calculate available/unclaimed tokens
-    const availableSupply = token?.supply ? token.supply - claimedCount : 0;
+    // Calculate available/unclaimed tokens - no longer based on supply
+    const availableSupply = 0; // We don't track supply in PoapToken model anymore
 
     // Return token information
     return NextResponse.json({
@@ -78,7 +78,6 @@ async function getTokenHandler(req: NextRequest, { params }: { params: Params })
           }
         : null,
       tokenMinted: !!token,
-      tokenSupply: token?.supply || 0,
       poap: {
         id: poap.id,
         title: poap.title,

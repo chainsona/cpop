@@ -1,3 +1,7 @@
+/**
+ * Types for POAP-related data
+ */
+
 // Define POAP types and interfaces
 import { ReactNode } from 'react';
 
@@ -10,8 +14,18 @@ export interface PoapItem {
   startDate: Date;
   endDate: Date;
   attendees: number | null;
-  status: 'Draft' | 'Published' | 'Distributed' | 'Unclaimable';
+  status: 'Draft' | 'Published' | 'Distributed' | 'Unclaimable' | 'Disabled';
   distributionMethods?: DistributionMethod[];
+  settings?: {
+    visibility: 'Public' | 'Unlisted' | 'Private';
+    allowSearch: boolean;
+    notifyOnClaim?: boolean;
+  };
+  creator?: {
+    id: string;
+    name: string | null;
+    walletAddress: string | null;
+  } | null;
 }
 
 // Distribution methods for badges
@@ -71,4 +85,11 @@ export interface StatusDisplay {
 export interface ColorPalette {
   background: string;
   gradient: string;
+}
+
+export interface POAP {
+  id: string;
+  title: string;
+  imageUrl: string;
+  status: 'Draft' | 'Published' | 'Distributed' | 'Unclaimable' | 'Disabled';
 }

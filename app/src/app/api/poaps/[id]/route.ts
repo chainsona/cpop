@@ -92,18 +92,25 @@ async function getHandler(request: Request, { params }: { params: Promise<Params
   try {
     const { id  } = await params;
 
-    // Fetch POAP from database
+    // Fetch POAP from database with optimized includes
+    // Only include minimal required data initially
     const poap = await prisma.poap.findUnique({
       where: { id: id },
       include: {
-        settings: true,
-        attributes: {
-          include: {
-            artists: true,
-            organization: true,
-          },
+        settings: {
+          select: {
+            visibility: true
+          }
         },
-        tokens: true, // Include token information
+        tokens: {
+          select: {
+            id: true,
+            mintAddress: true,
+            metadataUri: true,
+            metadataUpdatedAt: true,
+            updatedAt: true,
+          }
+        },
       },
     });
 
@@ -122,14 +129,13 @@ async function getHandler(request: Request, { params }: { params: Promise<Params
       );
     }
 
-    // If the POAP has a creator, fetch the creator data separately
+    // Fetch creator info separately only if needed
     let creator = null;
     if (poap.creatorId) {
       creator = await prisma.user.findUnique({
         where: { id: poap.creatorId },
         select: {
           id: true,
-          name: true,
           walletAddress: true,
         },
       });
@@ -183,6 +189,9 @@ async function putHandler(request: Request, { params }: { params: Promise<Params
     // Find the POAP to make sure it exists
     const existingPoap = await prisma.poap.findUnique({
       where: { id },
+      include: {
+        settings: true
+      }
     });
 
     if (!existingPoap) {
@@ -199,7 +208,7 @@ async function putHandler(request: Request, { params }: { params: Promise<Params
       // Check if the image URL is valid if it changed
       if (validatedData.imageUrl !== existingPoap.imageUrl) {
         const isImageValid = await validateImageUrl(validatedData.imageUrl);
-        if (!isImageValid) {
+        if (!isImageValid && validatedData.imageUrl !== 'https://placehold.co/600x400?text=POAP+Image') {
           return NextResponse.json(
             { error: 'Invalid image URL: Unable to verify image' },
             { status: 400 }
@@ -207,10 +216,33 @@ async function putHandler(request: Request, { params }: { params: Promise<Params
         }
       }
 
-      // Update the POAP
+      // Extract settings from the request if they exist
+      const { settings, ...poapData } = body;
+
+      // Update the POAP - handle the settings separately
       const updatedPoap = await prisma.poap.update({
         where: { id },
-        data: validatedData,
+        data: {
+          ...poapData,
+          ...(settings && {
+            settings: {
+              upsert: {
+                create: {
+                  visibility: settings.visibility || 'Public',
+                  allowSearch: settings.allowSearch ?? true,
+                  notifyOnClaim: true
+                },
+                update: {
+                  visibility: settings.visibility || 'Public',
+                  allowSearch: settings.allowSearch ?? true
+                }
+              }
+            }
+          })
+        },
+        include: {
+          settings: true
+        }
       });
 
       return NextResponse.json({

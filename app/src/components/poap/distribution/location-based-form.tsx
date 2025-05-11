@@ -86,6 +86,7 @@ export function LocationBasedForm({ id, onSuccess }: LocationBasedFormProps) {
         headers: {
           'Content-Type': 'application/json',
         },
+        credentials: 'include',
         body: JSON.stringify({
           type: 'LocationBased',
           city,

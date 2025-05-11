@@ -1,26 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { confirmTx, createRpc } from '@lightprotocol/stateless.js';
-import { compress, createTokenPool } from '@lightprotocol/compressed-token';
-import {
-  getOrCreateAssociatedTokenAccount,
-  mintTo as mintToSpl,
-  TOKEN_2022_PROGRAM_ID,
-  createInitializeMetadataPointerInstruction,
-  createInitializeMintInstruction,
-  ExtensionType,
-  getMintLen,
-  LENGTH_SIZE,
-  TYPE_SIZE,
-} from '@solana/spl-token';
-import {
-  Keypair,
-  sendAndConfirmTransaction,
-  SystemProgram,
-  Transaction,
-  PublicKey,
-} from '@solana/web3.js';
-import { createInitializeInstruction, pack, TokenMetadata } from '@solana/spl-token-metadata';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { apiMiddleware } from '../../../middleware';
@@ -29,19 +8,6 @@ import {
   calculateAdditionalSupplyNeeded,
   mintAdditionalTokenSupply,
 } from '@/lib/poap-utils';
-
-const RPC_ENDPOINT = process.env.SOLANA_RPC_ENDPOINT || '';
-
-// Interface for POAP data
-interface PoapData {
-  id: string;
-  title: string;
-  description: string;
-  imageUrl: string;
-  tokenMinted: boolean;
-  createdAt: Date;
-  [key: string]: any; // Allow additional properties
-}
 
 interface Params {
   id: string;
@@ -92,9 +58,9 @@ async function checkUserAuthorization(req: NextRequest, poapId: string): Promise
 }
 
 // GET handler to retrieve distribution methods
-async function getHandler(request: Request, { params }: { params: Promise<Params > }) {
+async function getHandler(request: Request, { params }: { params: Promise<Params> }) {
   try {
-    const { id: poapId  } = await params;
+    const { id: poapId } = await params;
 
     // Check authorization
     const isAuthorized = await checkUserAuthorization(request as unknown as NextRequest, poapId);
@@ -129,9 +95,9 @@ async function getHandler(request: Request, { params }: { params: Promise<Params
 }
 
 // POST handler to create a new distribution method
-async function postHandler(request: Request, { params }: { params: Promise<Params > }) {
+async function postHandler(request: Request, { params }: { params: Promise<Params> }) {
   try {
-    const { id: poapId  } = await params;
+    const { id: poapId } = await params;
 
     // Check authorization
     const isAuthorized = await checkUserAuthorization(request as unknown as NextRequest, poapId);
@@ -150,7 +116,10 @@ async function postHandler(request: Request, { params }: { params: Promise<Param
     const body = await request.json();
 
     // Validate distribution method type
-    if (!body.type || !['ClaimLinks', 'SecretWord', 'LocationBased', 'Airdrop'].includes(body.type)) {
+    if (
+      !body.type ||
+      !['ClaimLinks', 'SecretWord', 'LocationBased', 'Airdrop'].includes(body.type)
+    ) {
       return NextResponse.json({ error: 'Invalid distribution method type' }, { status: 400 });
     }
 
@@ -225,17 +194,17 @@ async function postHandler(request: Request, { params }: { params: Promise<Param
           // Track already generated tokens to ensure uniqueness
           const generatedTokens = new Set();
           const claimLinks = [];
-          
+
           for (let i = 0; i < body.amount; i++) {
             let token;
             // Generate a token that's not already in our set
             do {
               token = generateToken();
             } while (generatedTokens.has(token));
-            
+
             // Add to our set to track uniqueness
             generatedTokens.add(token);
-            
+
             claimLinks.push({
               distributionMethodId: distributionMethod.id,
               token,
@@ -250,7 +219,7 @@ async function postHandler(request: Request, { params }: { params: Promise<Param
 
           // Verify the correct number of links were created
           const createdCount = await prisma.claimLink.count({
-            where: { distributionMethodId: distributionMethod.id }
+            where: { distributionMethodId: distributionMethod.id },
           });
 
           // If we didn't create all the requested links, something went wrong
@@ -259,18 +228,22 @@ async function postHandler(request: Request, { params }: { params: Promise<Param
           }
 
           // Update the distributionMethod object with the newly created claim links
-          distributionMethod = await prisma.distributionMethod.findUnique({
-            where: { id: distributionMethod.id },
-            include: {
-              claimLinks: true,
-            },
-          }) || distributionMethod;
+          distributionMethod =
+            (await prisma.distributionMethod.findUnique({
+              where: { id: distributionMethod.id },
+              include: {
+                claimLinks: true,
+              },
+            })) || distributionMethod;
         } catch (error) {
           console.error('Error creating claim links:', error);
-          return NextResponse.json({ 
-            error: 'Failed to create claim links',
-            message: error instanceof Error ? error.message : 'Unknown error'
-          }, { status: 500 });
+          return NextResponse.json(
+            {
+              error: 'Failed to create claim links',
+              message: error instanceof Error ? error.message : 'Unknown error',
+            },
+            { status: 500 }
+          );
         }
         break;
 
@@ -279,7 +252,7 @@ async function postHandler(request: Request, { params }: { params: Promise<Param
         if (!Array.isArray(body.addresses) || body.addresses.length === 0) {
           return NextResponse.json({ error: 'Addresses array is required' }, { status: 400 });
         }
-        
+
         // Create the Airdrop distribution method
         await prisma.airdrop.create({
           data: {
@@ -298,50 +271,25 @@ async function postHandler(request: Request, { params }: { params: Promise<Param
       where: { poapId },
     });
 
-    // Token generation/update handling in the background
-    try {
-      if (!existingToken) {
-        // Mint new token if one doesn't exist
-        console.log(`No existing token found for POAP ${poapId}. Creating new token.`);
-        mintTokensAfterDistributionCreated(poapId)
-          .then(result => {
-            if (result?.success) {
-              console.log(
-                `Tokens auto-minted after distribution method creation: ${result.mintAddress}`
-              );
-            }
-          })
-          .catch(error => {
-            console.error('Error auto-minting tokens:', error);
-          });
-      } else {
-        // If token exists, calculate and mint additional supply if needed
-        console.log(`Existing token found for POAP ${poapId}. Checking for additional supply.`);
+    // Always ensure token exists, but don't mint more supply
+    if (!existingToken) {
+      try {
+        // Create token record with 0 supply
+        console.log(`No existing token found for POAP ${poapId}. Creating token.`);
+        const mintResult = await mintTokensAfterDistributionCreated(poapId);
 
-        calculateAdditionalSupplyNeeded(distributionMethod.id)
-          .then(additionalSupply => {
-            if (additionalSupply > 0) {
-              console.log(`Minting additional ${additionalSupply} tokens for POAP ${poapId}`);
-              return mintAdditionalTokenSupply(poapId, additionalSupply);
-            } else {
-              console.log(`No additional supply needed for POAP ${poapId}`);
-              return null;
-            }
-          })
-          .then(result => {
-            if (result?.success) {
-              console.log(
-                `Additional tokens minted: ${result.additionalSupply} tokens, new total: ${result.newTotalSupply}`
-              );
-            }
-          })
-          .catch(error => {
-            console.error('Error handling additional token supply:', error);
-          });
+        if (mintResult?.success) {
+          console.log(`Token created successfully: ${mintResult.mintAddress}`);
+        } else {
+          console.error('Failed to create token for POAP');
+        }
+      } catch (error) {
+        // Log error but don't block distribution method creation
+        console.error('Error creating token:', error);
       }
-    } catch (error) {
-      // Don't let token minting failure prevent distribution method creation
-      console.error('Error in token handling:', error);
+    } else {
+      // Token already exists, no need to mint additional supply
+      console.log(`Existing token found for POAP ${poapId}. No additional minting needed.`);
     }
 
     return NextResponse.json({
@@ -360,214 +308,3 @@ export const GET = (request: NextRequest, ctx: { params: Promise<Params> }) =>
 
 export const POST = (request: NextRequest, ctx: { params: Promise<Params> }) =>
   apiMiddleware(request, async () => postHandler(request as Request, ctx));
-
-// Function to mint compressed tokens for the first time
-async function mintCompressedTokens(poap: PoapData, amount: number) {
-  if (!RPC_ENDPOINT) {
-    throw new Error('Missing Solana RPC endpoint configuration');
-  }
-
-  // Create RPC connection
-  const connection = createRpc(RPC_ENDPOINT);
-
-  // Retrieve or create wallet from environment
-  const payer = Keypair.fromSecretKey(
-    Buffer.from(JSON.parse(process.env.SOLANA_WALLET_SECRET || '[]'))
-  );
-
-  // Generate a mint keypair
-  const mint = Keypair.generate();
-
-  const decimals = 0; // No decimal places for NFT-like tokens
-
-  // Create token metadata
-  const metadata: TokenMetadata = {
-    mint: mint.publicKey,
-    name: poap.title,
-    symbol: 'POAP',
-    uri: poap.imageUrl, // Could be replaced with IPFS metadata URI
-    additionalMetadata: [
-      ['description', poap.description],
-      ['event_id', poap.id],
-      ['created_at', poap.createdAt.toISOString()],
-    ],
-  };
-
-  const mintLen = getMintLen([ExtensionType.MetadataPointer]);
-  const metadataLen = TYPE_SIZE + LENGTH_SIZE + pack(metadata).length;
-
-  // Request minimum lamports for account rent
-  const mintLamports = await connection.getMinimumBalanceForRentExemption(mintLen + metadataLen);
-
-  // Create the mint transaction
-  const mintTransaction = new Transaction().add(
-    SystemProgram.createAccount({
-      fromPubkey: payer.publicKey,
-      newAccountPubkey: mint.publicKey,
-      space: mintLen,
-      lamports: mintLamports,
-      programId: TOKEN_2022_PROGRAM_ID,
-    }),
-    createInitializeMetadataPointerInstruction(
-      mint.publicKey,
-      payer.publicKey,
-      mint.publicKey,
-      TOKEN_2022_PROGRAM_ID
-    ),
-    createInitializeMintInstruction(
-      mint.publicKey,
-      decimals,
-      payer.publicKey,
-      null,
-      TOKEN_2022_PROGRAM_ID
-    ),
-    createInitializeInstruction({
-      programId: TOKEN_2022_PROGRAM_ID,
-      mint: mint.publicKey,
-      metadata: mint.publicKey,
-      name: metadata.name,
-      symbol: metadata.symbol,
-      uri: metadata.uri,
-      mintAuthority: payer.publicKey,
-      updateAuthority: payer.publicKey,
-    })
-  );
-
-  // Send and confirm the mint transaction
-  const txId = await sendAndConfirmTransaction(connection, mintTransaction, [payer, mint]);
-  console.log(`Mint created: ${txId}`);
-
-  // Register the mint with the Compressed-Token program
-  const poolTxId = await createTokenPool(
-    connection,
-    payer,
-    mint.publicKey,
-    undefined,
-    TOKEN_2022_PROGRAM_ID
-  );
-  console.log(`Token pool registered: ${poolTxId}`);
-
-  // Create an associated token account for the payer
-  const ata = await getOrCreateAssociatedTokenAccount(
-    connection,
-    payer,
-    mint.publicKey,
-    payer.publicKey,
-    undefined,
-    undefined,
-    undefined,
-    TOKEN_2022_PROGRAM_ID
-  );
-
-  // Mint SPL tokens
-  const mintSplTxId = await mintToSpl(
-    connection,
-    payer,
-    mint.publicKey,
-    ata.address,
-    payer.publicKey,
-    amount,
-    undefined,
-    undefined,
-    TOKEN_2022_PROGRAM_ID
-  );
-  console.log(`SPL tokens minted: ${mintSplTxId}`);
-
-  // Compress the tokens
-  const compressTxId = await compress(
-    connection,
-    payer,
-    mint.publicKey,
-    amount,
-    payer,
-    ata.address,
-    payer.publicKey
-  );
-  console.log(`Tokens compressed: ${compressTxId}`);
-
-  // Save mint info to database
-  await prisma.poapToken.create({
-    data: {
-      poapId: poap.id,
-      mintAddress: mint.publicKey.toString(),
-      supply: amount,
-      decimals,
-    },
-  });
-
-  return mint.publicKey.toString();
-}
-
-// Function to mint additional tokens when new distribution methods are added
-async function mintAdditionalTokens(poap: PoapData, additionalAmount: number) {
-  if (!RPC_ENDPOINT) {
-    throw new Error('Missing Solana RPC endpoint configuration');
-  }
-
-  // Create RPC connection
-  const connection = createRpc(RPC_ENDPOINT);
-
-  // Retrieve wallet from environment
-  const payer = Keypair.fromSecretKey(
-    Buffer.from(JSON.parse(process.env.SOLANA_WALLET_SECRET || '[]'))
-  );
-
-  // Get existing token information
-  const tokenInfo = await prisma.poapToken.findFirst({
-    where: { poapId: poap.id },
-  });
-
-  if (!tokenInfo || !tokenInfo.mintAddress) {
-    throw new Error('Token mint not found');
-  }
-
-  const mintAddress = new PublicKey(tokenInfo.mintAddress);
-
-  // Create an associated token account for the payer if needed
-  const ata = await getOrCreateAssociatedTokenAccount(
-    connection,
-    payer,
-    mintAddress,
-    payer.publicKey,
-    undefined,
-    undefined,
-    undefined,
-    TOKEN_2022_PROGRAM_ID
-  );
-
-  // Mint additional SPL tokens
-  const mintSplTxId = await mintToSpl(
-    connection,
-    payer,
-    mintAddress,
-    ata.address,
-    payer.publicKey,
-    additionalAmount,
-    undefined,
-    undefined,
-    TOKEN_2022_PROGRAM_ID
-  );
-  console.log(`Additional SPL tokens minted: ${mintSplTxId}`);
-
-  // Compress the additional tokens
-  const compressTxId = await compress(
-    connection,
-    payer,
-    mintAddress,
-    additionalAmount,
-    payer,
-    ata.address,
-    payer.publicKey
-  );
-  console.log(`Additional tokens compressed: ${compressTxId}`);
-
-  // Update token supply in database
-  await prisma.poapToken.update({
-    where: { id: tokenInfo.id },
-    data: {
-      supply: { increment: additionalAmount },
-    },
-  });
-
-  return mintAddress.toString();
-}

@@ -81,6 +81,7 @@ export function ClaimLinksForm({ id, onSuccess }: ClaimLinksFormProps) {
         headers: {
           'Content-Type': 'application/json',
         },
+        credentials: 'include',
         body: JSON.stringify({
           type: 'ClaimLinks',
           amount,

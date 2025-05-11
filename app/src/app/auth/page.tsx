@@ -6,6 +6,7 @@ import { useWalletContext } from '@/contexts/wallet-context';
 import { WalletAuth } from '@/components/wallet/wallet-auth';
 import { Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { usePageTitle } from '@/contexts/page-title-context';
 
 function AuthContent() {
   const { isConnected } = useWalletContext();
@@ -14,6 +15,16 @@ function AuthContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirectPath = searchParams.get('redirect') || '/';
+  const { setPageTitle } = usePageTitle();
+
+  // Set page title
+  useEffect(() => {
+    setPageTitle('Authentication');
+    
+    return () => {
+      setPageTitle('');
+    };
+  }, [setPageTitle]);
 
   // Store the redirect path in localStorage when the component mounts
   useEffect(() => {

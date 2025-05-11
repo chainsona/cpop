@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { poapFormSchema } from '@/lib/validations';
-import { AlertCircle, UploadCloud, Image as ImageIcon, X } from 'lucide-react';
+import { AlertCircle, UploadCloud, Image as ImageIcon, X, ExternalLink } from 'lucide-react';
 import { DeletePOAPButton } from './DeletePOAPButton';
 
 import {
@@ -20,6 +20,15 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { DatePicker } from '@/components/ui/date-picker';
 import { useRouter } from 'next/navigation';
+import { 
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Label } from '@/components/ui/label';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 
 // Define POAP data interface
 interface PoapData {
@@ -31,6 +40,10 @@ interface PoapData {
   startDate: string;
   endDate: string;
   attendees: number | null;
+  settings?: {
+    visibility?: 'Public' | 'Unlisted' | 'Private';
+    allowSearch?: boolean;
+  };
 }
 
 export function EditPOAPForm({ poapData }: { poapData: PoapData }) {
@@ -47,6 +60,14 @@ export function EditPOAPForm({ poapData }: { poapData: PoapData }) {
   // Store selected dates in local state for better control
   const [startDate, setStartDate] = useState<Date | undefined>(parsedStartDate);
   const [endDate, setEndDate] = useState<Date | undefined>(parsedEndDate);
+
+  // Visibility settings
+  const [visibility, setVisibility] = useState<'Public' | 'Unlisted' | 'Private'>(
+    poapData.settings?.visibility || 'Public'
+  );
+  const [allowSearch, setAllowSearch] = useState<boolean>(
+    poapData.settings?.allowSearch !== undefined ? poapData.settings.allowSearch : true
+  );
 
   // Using a more permissive type to avoid TS issues while preserving functionality
   const form = useForm({
@@ -194,6 +215,11 @@ export function EditPOAPForm({ poapData }: { poapData: PoapData }) {
         // Ensure dates are properly formatted ISO strings for API transmission
         startDate: startDate.toISOString(),
         endDate: endDate.toISOString(),
+        // Include visibility settings
+        settings: {
+          visibility,
+          allowSearch,
+        }
       };
 
       console.log('Submitting data:', formattedData);
@@ -507,7 +533,6 @@ export function EditPOAPForm({ poapData }: { poapData: PoapData }) {
                 <Input
                   type="number"
                   placeholder="Enter maximum attendees"
-                  disabled={isSubmitting}
                   {...field}
                   onChange={e => {
                     const value = e.target.value ? parseInt(e.target.value) : undefined;
@@ -521,28 +546,67 @@ export function EditPOAPForm({ poapData }: { poapData: PoapData }) {
           )}
         />
 
-        <div className="flex justify-between pt-4">
-          <div className="flex gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => router.back()}
-              disabled={isSubmitting}
-            >
-              Cancel
-            </Button>
-            <DeletePOAPButton
-              poapId={poapData.id}
-              onSuccess={() => router.push('/poaps')}
-              variant="ghost"
-            />
-          </div>
+        <Accordion type="single" collapsible className="w-full">
+          <AccordionItem value="settings">
+            <AccordionTrigger className="font-medium">Advanced Settings</AccordionTrigger>
+            <AccordionContent>
+              <div className="space-y-6 pt-2">
+                <div className="bg-white rounded-xl border border-neutral-200 p-6">
+                  <h2 className="text-lg font-semibold mb-4 flex items-center">
+                    <ExternalLink className="h-5 w-5 text-blue-600 mr-2" />
+                    Visibility
+                  </h2>
+
+                  <div className="space-y-4">
+                    <div>
+                      <Label htmlFor="visibility">Public Visibility</Label>
+                      <Select value={visibility} onValueChange={(value: 'Public' | 'Unlisted' | 'Private') => setVisibility(value)}>
+                        <SelectTrigger id="visibility" className="mt-1">
+                          <SelectValue placeholder="Select visibility" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Public">Public (visible to everyone)</SelectItem>
+                          <SelectItem value="Unlisted">Unlisted (only via direct link)</SelectItem>
+                          <SelectItem value="Private">Private (only for specific users)</SelectItem>
+                        </SelectContent>
+                      </Select>
+
+                      <p className="text-xs text-neutral-500 mt-1">
+                        {visibility === 'Public' &&
+                          'Your POAP will be visible to anyone and appear in public listings.'}
+                        {visibility === 'Unlisted' &&
+                          'Your POAP will only be visible to people with the direct link.'}
+                        {visibility === 'Private' &&
+                          'Your POAP will only be visible to specific users you designate.'}
+                      </p>
+                    </div>
+
+                    {visibility !== 'Private' && (
+                      <div className="flex items-center mt-4">
+                        <input
+                          type="checkbox"
+                          id="allowSearch"
+                          checked={allowSearch}
+                          onChange={e => setAllowSearch(e.target.checked)}
+                          className="h-4 w-4 rounded border-neutral-300 text-blue-600 focus:ring-blue-500"
+                        />
+                        <Label htmlFor="allowSearch" className="ml-2 text-sm font-normal cursor-pointer">
+                          Allow this POAP to appear in search results
+                        </Label>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
+
+        <div className="flex flex-col sm:flex-row gap-3 sm:justify-between pt-6">
+          <DeletePOAPButton poapId={poapData.id} />
+          
           <Button type="submit" disabled={isSubmitting}>
-            {isSubmitting ? (
-              <>{uploadProgress > 0 && uploadProgress < 100 ? 'Uploading...' : 'Updating...'}</>
-            ) : (
-              'Update POAP'
-            )}
+            {isSubmitting ? 'Updating...' : 'Update POAP'}
           </Button>
         </div>
       </form>

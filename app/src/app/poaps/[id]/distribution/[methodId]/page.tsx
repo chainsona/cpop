@@ -127,6 +127,8 @@ export default function DistributionMethodDetailsPage() {
   const [downloadFormat, setDownloadFormat] = useState<'json' | 'csv'>('csv');
   const [showDownloadOptions, setShowDownloadOptions] = useState(false);
 
+  const cluster = process.env.NEXT_PUBLIC_SOLANA_CLUSTER || 'mainnet';
+
   // Open QR code modal with the selected link
   const openQRCodeModal = (token: string) => {
     const url = getClaimUrl(token);
@@ -1180,9 +1182,11 @@ export default function DistributionMethodDetailsPage() {
                                             {link.transactionSignature && (
                                               <div>
                                                 <a
-                                                  href={link.transactionSignature.startsWith('sim_') 
-                                                    ? '#' 
-                                                    : `https://explorer.solana.com/tx/${link.transactionSignature}?cluster=mainnet`}
+                                                  href={
+                                                    link.transactionSignature.startsWith('sim_')
+                                                      ? '#'
+                                                      : `https://explorer.solana.com/tx/${link.transactionSignature}?cluster=${cluster}`
+                                                  }
                                                   target="_blank"
                                                   rel="noopener noreferrer"
                                                   className={`text-xs flex items-center gap-1 ${
@@ -1190,21 +1194,25 @@ export default function DistributionMethodDetailsPage() {
                                                       ? 'text-neutral-500 cursor-default'
                                                       : 'text-blue-600 hover:text-blue-800'
                                                   }`}
-                                                  onClick={(e) => {
-                                                    if (link.transactionSignature?.startsWith('sim_')) {
+                                                  onClick={e => {
+                                                    if (
+                                                      link.transactionSignature?.startsWith('sim_')
+                                                    ) {
                                                       e.preventDefault();
-                                                      toast.info('This is a simulated transaction and cannot be viewed on explorer');
+                                                      toast.info(
+                                                        'This is a simulated transaction and cannot be viewed on explorer'
+                                                      );
                                                     }
                                                   }}
                                                 >
                                                   <span>
-                                                    {link.transactionSignature.startsWith('sim_') 
-                                                      ? 'Simulated transaction' 
+                                                    {link.transactionSignature.startsWith('sim_')
+                                                      ? 'Simulated transaction'
                                                       : 'View on explorer'}
                                                   </span>
-                                                  {!link.transactionSignature.startsWith('sim_') && (
-                                                    <ExternalLink className="h-3 w-3" />
-                                                  )}
+                                                  {!link.transactionSignature.startsWith(
+                                                    'sim_'
+                                                  ) && <ExternalLink className="h-3 w-3" />}
                                                 </a>
                                               </div>
                                             )}
@@ -1217,7 +1225,10 @@ export default function DistributionMethodDetailsPage() {
                                                   variant="ghost"
                                                   size="sm"
                                                   className="h-5 p-0 w-5"
-                                                  onClick={() => link.claimedByWallet && copyToClipboard(link.claimedByWallet)}
+                                                  onClick={() =>
+                                                    link.claimedByWallet &&
+                                                    copyToClipboard(link.claimedByWallet)
+                                                  }
                                                 >
                                                   <Copy className="h-3 w-3" />
                                                   <span className="sr-only">Copy Wallet</span>

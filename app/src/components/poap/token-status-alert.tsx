@@ -1,20 +1,21 @@
 import { AlertTriangle, Coins, Loader2, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import Link from 'next/link';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { useWalletContext } from '@/contexts/wallet-context';
+import { POAPMintModal } from './poap-mint-modal';
+import { usePOAPMintModal } from '@/hooks/use-poap-mint-modal';
+import { mintPOAPTokens } from '@/lib/mint-tokens-utils';
 
 interface TokenStatusAlertProps {
   tokenStatus: {
     minted: boolean;
-    supply: number;
     metadataOutdated?: boolean;
     lastUpdated?: string;
   };
   poapId: string;
   hasDistributionMethods?: boolean;
-  onTokensMinted?: (newSupply: number) => void;
+  onTokensMinted?: (newSupply?: number) => void;
   onMetadataUpdated?: () => void;
 }
 
@@ -33,58 +34,31 @@ export function TokenStatusAlert({
   const [isLoading, setIsLoading] = useState(false);
   const [isUpdatingMetadata, setIsUpdatingMetadata] = useState(false);
   const { isAuthenticated, authenticate } = useWalletContext();
+  const { modalState, openMintingModal, setMintSuccess, setMintError, onOpenChange } =
+    usePOAPMintModal();
 
-  // Function to mint tokens
+  // Function to mint tokens using the centralized utility
   const mintTokens = async () => {
-    try {
-      setIsLoading(true);
+    setIsLoading(true);
 
-      // First ensure we're authenticated
-      if (!isAuthenticated) {
-        toast.warning('Authentication required to mint tokens');
-        const success = await authenticate();
-        if (!success) {
-          toast.error('Authentication failed. Please try again.');
-          return;
+    const result = await mintPOAPTokens({
+      poapId,
+      authenticate,
+      isAuthenticated,
+      onMintStart: openMintingModal,
+      onSuccess: data => {
+        setMintSuccess();
+        // Call the callback if provided
+        if (onTokensMinted) {
+          onTokensMinted();
         }
-      }
+      },
+      onError: error => {
+        setMintError(error);
+      },
+    });
 
-      // Get auth token for API request
-      const solanaToken =
-        typeof window !== 'undefined' ? localStorage.getItem('solana_auth_token') : null;
-
-      if (!solanaToken) {
-        throw new Error('Authentication token not found. Please log in again.');
-      }
-
-      // Make the API call with proper Solana authentication
-      const response = await fetch(`/api/poaps/${poapId}/mint`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Solana ${solanaToken}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to mint tokens');
-      }
-
-      // Success! Show toast notification
-      toast.success('POAP tokens minted successfully!');
-
-      // Call the callback to update parent state if provided
-      if (onTokensMinted && data.tokenSupply) {
-        onTokensMinted(data.tokenSupply);
-      }
-    } catch (error) {
-      console.error('Error minting tokens:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to mint tokens');
-    } finally {
-      setIsLoading(false);
-    }
+    setIsLoading(false);
   };
 
   // Function to update token metadata
@@ -94,23 +68,25 @@ export function TokenStatusAlert({
 
       // First ensure we're authenticated
       if (!isAuthenticated) {
-        toast.warning('Authentication required to update token metadata');
         const success = await authenticate();
         if (!success) {
-          toast.error('Authentication failed. Please try again.');
+          setIsUpdatingMetadata(false);
+          toast.error('Authentication failed. Please log in and try again.');
           return;
         }
       }
 
-      // Get auth token for API request
+      // Get the Solana auth token exactly as stored by the wallet context
       const solanaToken =
         typeof window !== 'undefined' ? localStorage.getItem('solana_auth_token') : null;
 
       if (!solanaToken) {
-        throw new Error('Authentication token not found. Please log in again.');
+        setIsUpdatingMetadata(false);
+        toast.error('Authentication token not found. Please log in again.');
+        return;
       }
 
-      // Make the API call with proper Solana authentication
+      // Make API call to update metadata
       const response = await fetch(`/api/poaps/${poapId}/token/update-metadata`, {
         method: 'POST',
         headers: {
@@ -119,30 +95,33 @@ export function TokenStatusAlert({
         },
       });
 
-      const data = await response.json();
-
       if (!response.ok) {
-        throw new Error(data.error || 'Failed to update token metadata');
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to update metadata');
       }
 
-      // Success! Show toast notification
       toast.success('Token metadata updated successfully!');
 
-      // Call the callback to update parent state if provided
+      // Call the callback if provided
       if (onMetadataUpdated) {
         onMetadataUpdated();
       }
-    } catch (error) {
-      console.error('Error updating token metadata:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to update token metadata');
+    } catch (err) {
+      console.error('Error updating token metadata:', err);
+      toast.error(
+        err instanceof Error ? err.message : 'Failed to update metadata. Please try again.'
+      );
     } finally {
       setIsUpdatingMetadata(false);
     }
   };
 
+  // Render component with appropriate alert and modal
+  let alertContent = null;
+
   // Token exists and needs metadata update - show update message
   if (tokenStatus.minted && tokenStatus.metadataOutdated) {
-    return (
+    alertContent = (
       <div className="bg-purple-50 rounded-lg p-4 flex gap-3 items-start mb-6 shadow-sm">
         <RefreshCw className="h-5 w-5 text-purple-500 flex-shrink-0 mt-0.5" />
         <div className="flex-1">
@@ -167,7 +146,7 @@ export function TokenStatusAlert({
             ) : (
               <>
                 <RefreshCw className="h-4 w-4" />
-                Update Token Metadata
+                Update Metadata
               </>
             )}
           </Button>
@@ -175,27 +154,34 @@ export function TokenStatusAlert({
       </div>
     );
   }
-
-  // If there are no distribution methods at all, don't show the warning
-  if (!hasDistributionMethods) {
-    return null;
-  }
-
-  // Show warning only if no token exists but there are distribution methods
-  if (!tokenStatus.minted) {
-    return (
-      <div className="bg-amber-50 rounded-lg p-4 flex gap-3 items-start mb-6 shadow-sm animate-pulse-subtle">
-        <AlertTriangle className="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" />
+  // Token exists - show success message
+  else if (tokenStatus.minted) {
+    alertContent = (
+      <div className="bg-green-50 rounded-lg p-4 flex gap-3 items-start mb-6 shadow-sm">
+        <Coins className="h-5 w-5 text-green-500 flex-shrink-0 mt-0.5" />
         <div className="flex-1">
-          <h3 className="font-medium text-amber-800 mb-1">
-            Action Required: Mint Your POAP Tokens
-          </h3>
-          <p className="text-amber-700 text-sm mb-3">
-            Your distribution methods are ready, but you need to mint tokens first.
+          <h3 className="font-medium text-green-800 mb-1">POAP Token is ready</h3>
+          <p className="text-green-700 text-sm">
+            Your POAP token has been successfully minted and is ready for distribution.
+          </p>
+        </div>
+      </div>
+    );
+  }
+  // No token and has distribution methods - show warning
+  else if (!tokenStatus.minted && hasDistributionMethods) {
+    alertContent = (
+      <div className="bg-yellow-50 rounded-lg p-4 flex gap-3 items-start mb-6 shadow-sm">
+        <AlertTriangle className="h-5 w-5 text-yellow-500 flex-shrink-0 mt-0.5" />
+        <div className="flex-1">
+          <h3 className="font-medium text-yellow-800 mb-1">POAP Token not minted yet</h3>
+          <p className="text-yellow-700 text-sm mb-3">
+            You've created distribution methods, but the POAP Token is not minted yet. Users won't
+            be able to claim POAPs until the token is minted.
           </p>
           <Button
             size="sm"
-            className="bg-amber-600 text-white hover:bg-amber-700 gap-1.5 border-0"
+            className="bg-yellow-500 text-white hover:bg-yellow-600 gap-1.5 border-0"
             onClick={mintTokens}
             disabled={isLoading}
           >
@@ -216,5 +202,18 @@ export function TokenStatusAlert({
     );
   }
 
-  return null;
+  // Return the alert content with the modal
+  return (
+    <>
+      {alertContent}
+
+      <POAPMintModal
+        open={modalState.open}
+        onOpenChange={onOpenChange}
+        status={modalState.status}
+        error={modalState.error}
+        poapId={poapId}
+      />
+    </>
+  );
 }

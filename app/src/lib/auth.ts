@@ -106,6 +106,67 @@ export async function getServerAuthSession() {
   return await getServerSession(authOptions);
 }
 
+// Verify authentication from request headers
+export async function verifyAuth(request: Request) {
+  try {
+    // Extract the authorization header
+    const authHeader = request.headers.get('Authorization');
+    
+    // Check for cookie auth as well
+    const cookies = request.headers.get('Cookie');
+    let cookieToken = null;
+    
+    if (cookies) {
+      const tokenCookie = cookies.split(';').find(c => c.trim().startsWith('solana_auth_token='));
+      if (tokenCookie) {
+        cookieToken = tokenCookie.split('=')[1];
+      }
+    }
+    
+    // Try to extract the token from the Authorization header
+    let token = null;
+    if (authHeader && authHeader.startsWith('Solana ')) {
+      token = authHeader.substring(7);
+    } else if (cookieToken) {
+      token = cookieToken;
+    }
+    
+    if (!token) {
+      return { isAuthenticated: false, walletAddress: null };
+    }
+    
+    // Decode and verify the token
+    try {
+      // Base64 decode the token
+      const decodedToken = JSON.parse(Buffer.from(token, 'base64').toString());
+      
+      // Extract the wallet address and verify the token is still valid
+      if (
+        decodedToken.message && 
+        decodedToken.message.address &&
+        decodedToken.message.expirationTime
+      ) {
+        const expirationTime = new Date(decodedToken.message.expirationTime);
+        
+        // Check if token has expired
+        if (expirationTime > new Date()) {
+          return { 
+            isAuthenticated: true, 
+            walletAddress: decodedToken.message.address 
+          };
+        }
+      }
+    } catch (decodeError) {
+      console.error('Error decoding auth token:', decodeError);
+    }
+    
+    return { isAuthenticated: false, walletAddress: null };
+  } catch (error) {
+    console.error('Auth verification error:', error);
+    return { isAuthenticated: false, walletAddress: null };
+  }
+}
+
 // Add NextAuth types
 declare module 'next-auth' {
   interface Session {

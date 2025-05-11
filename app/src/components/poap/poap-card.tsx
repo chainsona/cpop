@@ -74,7 +74,7 @@ export function POAPCard({ poap }: POAPCardProps) {
           </div>
 
           {/* POAP Actions component */}
-          <POAPActions id={poap.id} title={poap.title} website={poap.website} />
+          <POAPActions id={poap.id} title={poap.title} website={poap.website} creator={poap.creator} />
         </div>
       </div>
     </div>

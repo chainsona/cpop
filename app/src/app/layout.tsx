@@ -18,7 +18,10 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'POAP',
+  title: {
+    default: 'POAP',
+    template: '%s | POAP',
+  },
   description: 'Manage Proof of Attendance Protocol tokens for your events',
 };
 

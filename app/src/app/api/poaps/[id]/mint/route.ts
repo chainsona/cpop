@@ -106,7 +106,6 @@ async function mintHandler(request: Request, { params }: { params: Promise<Param
       return NextResponse.json({
         success: true,
         message: 'Tokens already minted',
-        tokenSupply: token.supply,
         mintAddress: token.mintAddress,
       });
     }
@@ -123,43 +122,6 @@ async function mintHandler(request: Request, { params }: { params: Promise<Param
       return NextResponse.json({ error: 'No active distribution methods found' }, { status: 400 });
     }
 
-    // Calculate total token supply from all active distribution methods
-    let totalSupply = 0;
-
-    for (const method of distributionMethods) {
-      // For claim links, count the number of links
-      if (method.type === 'ClaimLinks') {
-        const claimLinks = await prisma.claimLink.findMany({
-          where: { distributionMethodId: method.id },
-        });
-        totalSupply += claimLinks.length;
-      }
-      // For secret word and location based, use the maxClaims parameter or a default
-      else if (method.type === 'SecretWord') {
-        const secretWord = await prisma.secretWord.findUnique({
-          where: { distributionMethodId: method.id },
-        });
-        totalSupply += secretWord?.maxClaims || 0; // Default to 0 if no max
-      } else if (method.type === 'LocationBased') {
-        const locationBased = await prisma.locationBased.findUnique({
-          where: { distributionMethodId: method.id },
-        });
-        totalSupply += locationBased?.maxClaims || 0; // Default to 0 if no max
-      } else if (method.type === 'Airdrop') {
-        const airdrop = await prisma.airdrop.findUnique({
-          where: { distributionMethodId: method.id },
-        });
-        totalSupply += airdrop?.addresses?.length || 0; // Use the number of addresses
-      }
-    }
-
-    // If no supply is specified, mint tokens with 0 supply, which will create the token
-    // but won't mint any actual tokens until the supply is updated later
-    if (totalSupply <= 0) {
-      console.log('No supply specified in distribution methods, minting with 0 supply');
-      totalSupply = 0;
-    }
-
     // Mint tokens
     try {
       let mintAddress = '';
@@ -168,12 +130,11 @@ async function mintHandler(request: Request, { params }: { params: Promise<Param
         throw new Error('Missing Solana RPC endpoint configuration');
       }
 
-      mintAddress = await mintCompressedTokens(poap as PoapData, totalSupply);
+      mintAddress = await mintCompressedTokens(poap as PoapData);
 
       return NextResponse.json({
         success: true,
         message: 'Tokens minted successfully',
-        tokenSupply: totalSupply,
         mintAddress,
       });
     } catch (error) {
@@ -197,7 +158,7 @@ export const POST = (request: NextRequest, ctx: { params: Promise<Params> }) =>
   apiMiddleware(request, async () => mintHandler(request as Request, ctx));
 
 // Function to mint compressed tokens - internal implementation
-async function mintCompressedTokens(poap: PoapData, amount: number): Promise<string> {
+async function mintCompressedTokens(poap: PoapData): Promise<string> {
   if (!RPC_ENDPOINT) {
     throw new Error('Missing Solana RPC endpoint configuration');
   }
@@ -331,39 +292,37 @@ async function mintCompressedTokens(poap: PoapData, amount: number): Promise<str
     TOKEN_2022_PROGRAM_ID
   );
 
-  // Mint SPL tokens - Use the mintAuthority for signing
+  // Always mint 0 tokens initially regardless of the amount parameter
   const mintSplTxId = await mintToSpl(
     connection,
     payer,
     mint.publicKey,
     ata.address,
     mintAuthority.publicKey,
-    amount,
+    0, // Always use 0 for initial supply
     [mintAuthority],
     undefined,
     TOKEN_2022_PROGRAM_ID
   );
   console.log(`SPL tokens minted: ${mintSplTxId}`);
 
-  // Compress the tokens
+  // Compress the tokens - with 0 amount
   const compressTxId = await compress(
     connection,
     payer,
     mint.publicKey,
-    amount,
+    0, // Always use 0 for initial supply
     payer,
     ata.address,
     payer.publicKey
   );
   console.log(`Tokens compressed: ${compressTxId}`);
 
-  // Save mint info to database - here we store token data instead of updating POAP fields
+  // Save mint info to database
   await prisma.poapToken.create({
     data: {
       poapId: poap.id,
       mintAddress: mint.publicKey.toString(),
-      supply: amount,
-      decimals,
       metadataUri, // Store the metadata URI
     },
   });

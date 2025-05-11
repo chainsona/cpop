@@ -26,7 +26,7 @@ type Params = {
 async function mintAdditionalTokens(
   poapId: string,
   additionalSupply: number
-): Promise<{ mintAddress: string; newTotalSupply: number }> {
+): Promise<{ mintAddress: string }> {
   if (!RPC_ENDPOINT) {
     throw new Error('Missing Solana RPC endpoint configuration');
   }
@@ -98,13 +98,12 @@ async function mintAdditionalTokens(
   await prisma.poapToken.update({
     where: { id: token.id },
     data: {
-      supply: { increment: additionalSupply },
+      // We don't store supply in PoapToken model
     },
   });
 
   return {
     mintAddress: token.mintAddress,
-    newTotalSupply: token.supply + additionalSupply,
   };
 }
 
@@ -180,7 +179,6 @@ async function postHandler(request: Request, { params }: { params: Promise<Param
         message: 'Additional tokens minted successfully',
         additionalSupply,
         mintAddress: result.mintAddress,
-        newTotalSupply: result.newTotalSupply,
       });
     } catch (error) {
       console.error('Error minting additional tokens:', error);

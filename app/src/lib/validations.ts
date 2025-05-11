@@ -43,9 +43,11 @@ export const poapFormSchema = z
       .min(1, {
         message: 'Please upload an image or provide an image URL.',
       })
-      .refine(val => val.startsWith('http') || val.startsWith('data:image'), {
+      .refine(val => val.startsWith('http') || val.startsWith('data:image') || val.startsWith('blob:') || val === '', {
         message: 'Please provide a valid image URL or upload an image.',
-      }),
+      })
+      .optional()
+      .default('https://placehold.co/600x400?text=POAP+Image'),
     website: z
       .string()
       .url({

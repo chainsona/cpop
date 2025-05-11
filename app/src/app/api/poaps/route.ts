@@ -90,20 +90,35 @@ async function postHandler(request: NextRequest) {
 
       // Check if the image URL is valid
       const isImageValid = await validateImageUrl(validatedData.imageUrl);
-      if (!isImageValid) {
+      if (!isImageValid && validatedData.imageUrl !== 'https://placehold.co/600x400?text=POAP+Image') {
         return NextResponse.json(
           { error: 'Invalid image URL: Unable to verify image' },
           { status: 400 }
         );
       }
 
-      // Create the new POAP in the database with creator info
-    const poap = await prisma.poap.create({
-      data: {
-          ...validatedData,
+      // Extract settings from the request if they exist
+      const { settings, ...poapData } = body;
+
+      // Create the new POAP in the database with creator info and settings
+      const poap = await prisma.poap.create({
+        data: {
+          ...poapData,
           creatorId, // Associate POAP with the creator
-      },
-    });
+          ...(settings && {
+            settings: {
+              create: {
+                visibility: settings.visibility || 'Public',
+                allowSearch: settings.allowSearch ?? true,
+                notifyOnClaim: true,
+              }
+            }
+          })
+        },
+        include: {
+          settings: true
+        }
+      });
 
       return NextResponse.json({
         success: true,
@@ -116,9 +131,9 @@ async function postHandler(request: NextRequest) {
           {
             error: 'Validation error',
             details: validationError.errors,
-      },
+          },
           { status: 400 }
-    );
+        );
       }
       throw validationError;
     }
@@ -174,6 +189,9 @@ async function getHandler(request: NextRequest) {
     const poaps = await prisma.poap.findMany({
       where,
       orderBy: { createdAt: 'desc' },
+      include: {
+        settings: true
+      }
     });
 
     // If we have poaps and need creator information, fetch it separately

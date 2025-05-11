@@ -15,6 +15,48 @@ export function getTruncatedImageInfo(imageUrl: string): string {
   return `Base64 Image (${size.toFixed(0)}KB)`;
 }
 
+/**
+ * Safely encode and prepare an image URL for Next.js Image component
+ * Handles special characters in URLs that might cause encoding issues
+ */
+export function getSafeImageUrl(url: string): string {
+  if (!url) return '';
+  
+  // Return base64 images as-is
+  if (isBase64Image(url)) return url;
+  
+  try {
+    // For URLs with special characters, we need proper encoding
+    // Use URL constructor for proper parsing
+    const urlObj = new URL(url);
+    
+    // Handle the search params separately to ensure proper encoding
+    const searchParams = new URLSearchParams();
+    
+    // Get existing search params and re-add them with proper encoding
+    for (const [key, value] of urlObj.searchParams.entries()) {
+      searchParams.append(key, value);
+    }
+    
+    // Build the final URL with encoded path and search params
+    const encodedPath = encodeURI(decodeURI(urlObj.pathname));
+    const encodedSearch = searchParams.toString();
+    
+    // Reconstruct the URL with properly encoded components
+    return `${urlObj.protocol}//${urlObj.host}${encodedPath}${encodedSearch ? `?${encodedSearch}` : ''}`;
+  } catch (e) {
+    // If URL parsing fails, try a simple encoding approach as fallback
+    console.error("Failed to encode image URL:", e);
+    try {
+      // For simple URLs without complex parameters, encode the whole URL
+      return encodeURI(decodeURI(url));
+    } catch {
+      // If all encoding attempts fail, return the original URL
+      return url;
+    }
+  }
+}
+
 // Color palettes - mapped to Tailwind config custom gradients
 export const COLOR_PALETTES: ColorPalette[] = [
   {
@@ -201,7 +243,6 @@ export async function mintTokensAfterDistributionCreated(poapId: string): Promis
       return {
         success: true,
         message: 'Tokens already minted',
-        tokenSupply: existingToken.supply,
         mintAddress: existingToken.mintAddress,
       };
     }
@@ -215,45 +256,8 @@ export async function mintTokensAfterDistributionCreated(poapId: string): Promis
       throw new Error(`POAP ${poapId} not found`);
     }
 
-    // Calculate total token supply from all active distribution methods
-    const distributionMethods = await prisma.distributionMethod.findMany({
-      where: {
-        poapId,
-        disabled: false,
-      },
-    });
-
-    let totalSupply = 0;
-
-    for (const method of distributionMethods) {
-      if (method.type === 'ClaimLinks') {
-        const claimLinks = await prisma.claimLink.findMany({
-          where: { distributionMethodId: method.id },
-        });
-        totalSupply += claimLinks.length;
-      } else if (method.type === 'SecretWord') {
-        const secretWord = await prisma.secretWord.findUnique({
-          where: { distributionMethodId: method.id },
-        });
-        totalSupply += secretWord?.maxClaims || 0;
-      } else if (method.type === 'LocationBased') {
-        const locationBased = await prisma.locationBased.findUnique({
-          where: { distributionMethodId: method.id },
-        });
-        totalSupply += locationBased?.maxClaims || 0;
-      } else if (method.type === 'Airdrop') {
-        const airdrop = await prisma.airdrop.findUnique({
-          where: { distributionMethodId: method.id },
-        });
-        totalSupply += airdrop?.addresses?.length || 0;
-      }
-    }
-
-    // If no supply is specified, mint with 0 supply
-    if (totalSupply <= 0) {
-      console.log('No supply specified in distribution methods, minting with 0 supply');
-      totalSupply = 0;
-    }
+    // Always mint, even with 0 supply
+    console.log(`Minting token for POAP ${poapId}`);
 
     // Instead of calling the route handler, make a POST request to the API endpoint
     const response = await post(`/api/poaps/${poapId}/mint`, {}) as { 
@@ -270,7 +274,6 @@ export async function mintTokensAfterDistributionCreated(poapId: string): Promis
     return {
       success: true,
       message: 'Tokens minted successfully',
-      tokenSupply: totalSupply,
       mintAddress: response.mintAddress,
     };
   } catch (error) {
@@ -371,7 +374,6 @@ export async function mintAdditionalTokenSupply(
       message: 'Additional tokens minted successfully',
       additionalSupply,
       mintAddress: token.mintAddress,
-      newTotalSupply: token.supply + additionalSupply,
     };
   } catch (error) {
     console.error('Error minting additional token supply:', error);

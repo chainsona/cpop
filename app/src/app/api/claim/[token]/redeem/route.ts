@@ -1,13 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import {
-  PublicKey,
-  Connection,
-  clusterApiUrl,
-  Keypair,
-  Transaction,
-  sendAndConfirmTransaction,
-} from '@solana/web3.js';
+import { PublicKey, Connection, clusterApiUrl, Keypair } from '@solana/web3.js';
 import { resolve } from '@bonfida/spl-name-service';
 import fs from 'fs';
 import path from 'path';
@@ -20,6 +13,7 @@ import {
 } from '@solana/spl-token';
 import { createRpc } from '@lightprotocol/stateless.js';
 import bs58 from 'bs58';
+import { mintTokensAfterDistributionCreated } from '@/lib/poap-utils';
 
 const RPC_ENDPOINT = process.env.SOLANA_RPC_ENDPOINT || '';
 
@@ -182,9 +176,9 @@ async function transferTokenToWallet(
       undefined,
       TOKEN_2022_PROGRAM_ID
     );
-    
+
     console.log(`Current authority token balance: ${sourceAccount.amount}`);
-    
+
     if (Number(sourceAccount.amount) >= 1) {
       // If authority has tokens, proceed with transfer
       console.log('Authority has sufficient tokens. Proceeding with transfer...');
@@ -212,7 +206,7 @@ async function transferTokenToWallet(
   // If we reach here, either the authority has no tokens or there was an error
   // Mint directly to the destination instead
   console.log('Minting new token directly to destination wallet');
-  
+
   // Mint 1 token directly to the destination
   const mintTx = await mintTo(
     connection,
@@ -225,9 +219,58 @@ async function transferTokenToWallet(
     undefined,
     TOKEN_2022_PROGRAM_ID
   );
-  
+
   console.log(`Token minted directly to destination: ${mintTx}`);
   return mintTx;
+}
+
+/**
+ * Check if POAP token exists and create it if not
+ * @param poapId The ID of the POAP
+ * @returns Success status and mint address if successful
+ */
+async function ensurePoapTokenExists(
+  poapId: string
+): Promise<{ success: boolean; mintAddress?: string; message?: string }> {
+  try {
+    // Check if token already exists
+    const existingToken = await prisma.poapToken.findFirst({
+      where: { poapId },
+    });
+
+    if (existingToken && existingToken.mintAddress) {
+      console.log(`POAP token already exists for POAP ${poapId}`);
+      return {
+        success: true,
+        mintAddress: existingToken.mintAddress,
+      };
+    }
+
+    // Token doesn't exist, create it
+    console.log(`POAP token does not exist for POAP ${poapId}, creating now...`);
+    const mintResult = await mintTokensAfterDistributionCreated(poapId);
+
+    if (!mintResult || !mintResult.success) {
+      const errorMessage = mintResult?.message || 'Failed to create POAP token';
+      console.error(`Error creating POAP token: ${errorMessage}`);
+      return {
+        success: false,
+        message: errorMessage,
+      };
+    }
+
+    return {
+      success: true,
+      mintAddress: mintResult.mintAddress,
+    };
+  } catch (error) {
+    console.error('Error ensuring POAP token exists:', error);
+    return {
+      success: false,
+      message:
+        error instanceof Error ? error.message : 'Unknown error checking/creating POAP token',
+    };
+  }
 }
 
 export async function POST(request: Request, { params }: { params: Promise<Params> }) {
@@ -322,22 +365,48 @@ export async function POST(request: Request, { params }: { params: Promise<Param
 
     // Check if POAP token exists and has been minted
     const poapTokens = claimLink.distributionMethod.poap.tokens;
+    let mintAddress: string;
+
     if (!poapTokens || poapTokens.length === 0 || !poapTokens[0].mintAddress) {
-      return NextResponse.json(
-        {
-          error: 'POAP token has not been minted yet',
-        },
-        { status: 400 }
-      );
+      // Instead of returning an error, try to create the POAP token
+      console.log('POAP token not found, attempting to create it');
+
+      const poapId = claimLink.distributionMethod.poap.id;
+      const tokenResult = await ensurePoapTokenExists(poapId);
+
+      if (!tokenResult.success) {
+        return NextResponse.json(
+          {
+            error: 'Failed to create POAP token',
+            message: tokenResult.message,
+          },
+          { status: 500 }
+        );
+      }
+
+      // Use the newly created token
+      if (!tokenResult.mintAddress) {
+        return NextResponse.json(
+          {
+            error: 'POAP token creation succeeded but mint address is missing',
+          },
+          { status: 500 }
+        );
+      }
+
+      mintAddress = tokenResult.mintAddress;
+    } else {
+      // Use the existing token
+      mintAddress = poapTokens[0].mintAddress;
     }
 
+    // Track if this was a .sol domain resolution
+    const wasSolDomain = normalizedInput.toLowerCase().endsWith('.sol');
+
     // Transfer token to the claiming wallet
-    let transactionSignature;
+    let transactionSignature: string;
     try {
-      transactionSignature = await transferTokenToWallet(
-        poapTokens[0].mintAddress,
-        resolvedWalletAddress
-      );
+      transactionSignature = await transferTokenToWallet(mintAddress, resolvedWalletAddress);
     } catch (transferError) {
       console.error('Error transferring token:', transferError);
       return NextResponse.json(
@@ -349,9 +418,6 @@ export async function POST(request: Request, { params }: { params: Promise<Param
         { status: 500 }
       );
     }
-
-    // Track if this was a .sol domain resolution
-    const wasSolDomain = normalizedInput.toLowerCase().endsWith('.sol');
 
     // Mark the claim link as claimed with wallet information
     try {
@@ -439,7 +505,7 @@ export async function POST(request: Request, { params }: { params: Promise<Param
           original: wasSolDomain ? normalizedInput : resolvedWalletAddress,
           wasSolDomain: wasSolDomain,
         },
-        mintAddress: poapTokens[0].mintAddress,
+        mintAddress: mintAddress,
         transactionSignature,
         claimedAt: new Date().toISOString(),
       },

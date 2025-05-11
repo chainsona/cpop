@@ -4,7 +4,7 @@ import * as React from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Calendar, ExternalLink, Bell, Save, Loader2 } from 'lucide-react';
+import { ArrowLeft, Calendar, ExternalLink, Bell, Save, Loader2, XCircle } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { DatePicker } from '@/components/ui/date-picker';
@@ -16,6 +16,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { POAPTabNav } from '@/components/poap/poap-tab-nav';
+import { ToggleDisabledStatus } from '@/components/poap/toggle-disabled-status';
 import { toast } from 'sonner';
 
 export default function POAPSettingsPage() {
@@ -40,6 +41,9 @@ export default function POAPSettingsPage() {
   // Notification settings
   const [notifyOnClaim, setNotifyOnClaim] = React.useState<boolean>(true);
 
+  // Disable POAP status
+  const [poapStatus, setPoapStatus] = React.useState<string>('');
+
   // Fetch existing settings data
   React.useEffect(() => {
     const fetchPoapAndSettings = async () => {
@@ -54,6 +58,9 @@ export default function POAPSettingsPage() {
           const poapData = await poapResponse.json();
           
           if (poapData.poap) {
+            // Set POAP status
+            setPoapStatus(poapData.poap.status);
+            
             // Only set the dates if settings haven't been loaded yet
             if (poapData.poap.startDate) {
               setStartDate(new Date(poapData.poap.startDate));
@@ -386,6 +393,19 @@ export default function POAPSettingsPage() {
                 </Label>
               </div>
             </div>
+          </div>
+
+          {/* Disable POAP Option */}
+          <div className="bg-white rounded-xl border border-neutral-200 p-6">
+            <h2 className="text-lg font-semibold mb-4 flex items-center">
+              <XCircle className="h-5 w-5 text-red-600 mr-2" />
+              Disable POAP
+            </h2>
+
+            <ToggleDisabledStatus 
+              poapId={id} 
+              isDisabled={poapStatus === 'Disabled'} 
+            />
           </div>
         </div>
 

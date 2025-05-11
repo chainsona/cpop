@@ -5,27 +5,47 @@ import { Sparkles } from 'lucide-react';
 import { EmptyState } from '@/components/poap/empty-state';
 import { POAPCard } from '@/components/poap/poap-card';
 import { PoapItem } from '@/types/poap';
-import { fetchWithAuth } from '@/lib/api-client';
 import { useWalletContext } from '@/contexts/wallet-context';
 import { ConnectWallet } from '@/components/wallet/connect-wallet';
+import { usePageTitle } from '@/contexts/page-title-context';
 
 export default function ExplorerPage() {
   const [poaps, setPoaps] = useState<PoapItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { isConnected, isAuthenticated } = useWalletContext();
+  const { setPageTitle } = usePageTitle();
 
   useEffect(() => {
+    // Set page title to Explorer
+    setPageTitle('Explorer');
+    
     async function fetchPoaps() {
       try {
         setIsLoading(true);
-        const response = await fetchWithAuth('/api/poaps');
+        
+        // Use the correct port based on the development server
+        const port = process.env.NODE_ENV === 'development' ? window.location.port : '';
+        const baseUrl = `${window.location.protocol}//${window.location.hostname}${port ? ':' + port : ''}`;
+        
+        console.log(`Fetching POAPs from: ${baseUrl}/api/poaps`);
+        
+        const response = await fetch(`${baseUrl}/api/poaps`, {
+          cache: 'no-store',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        });
         
         if (!response.ok) {
-          throw new Error('Failed to fetch POAPs');
+          const errorData = await response.json().catch(() => null);
+          console.error('Failed to fetch POAPs:', response.status, errorData);
+          throw new Error(`Failed to fetch POAPs: ${response.status}`);
         }
         
         const data = await response.json();
+        console.log('Received data:', data);
+        
         setPoaps(data.poaps || []);
       } catch (err) {
         console.error('Error fetching POAPs:', err);
@@ -35,12 +55,13 @@ export default function ExplorerPage() {
       }
     }
 
-    if (isConnected && isAuthenticated) {
-      fetchPoaps();
-    } else {
-      setIsLoading(false);
-    }
-  }, [isConnected, isAuthenticated]);
+    fetchPoaps();
+    
+    // Clean up function to reset the page title when leaving the page
+    return () => {
+      setPageTitle('');
+    };
+  }, [setPageTitle]);
 
   return (
     <div className="container mx-auto py-10">
@@ -51,19 +72,8 @@ export default function ExplorerPage() {
         </div>
 
         <p className="text-neutral-600 mb-8">
-          Explore and explorer interesting POAPs from the community.
+          Explore interesting POAPs from the community.
         </p>
-
-        {/* Show auth wall if not connected */}
-        {!isConnected && (
-          <div className="bg-blue-50 border border-blue-200 rounded-xl p-8 text-center mb-8">
-            <h2 className="text-xl font-semibold mb-4">Connect your wallet</h2>
-            <p className="text-neutral-600 mb-6">
-              Connect your wallet to explorer and explore POAPs.
-            </p>
-            <ConnectWallet />
-          </div>
-        )}
 
         {/* Loading state */}
         {isLoading && (
@@ -81,12 +91,12 @@ export default function ExplorerPage() {
         )}
 
         {/* Empty state */}
-        {isConnected && isAuthenticated && !isLoading && poaps.length === 0 && !error && (
-          <EmptyState message="No POAPs to explorer yet" />
+        {!isLoading && poaps.length === 0 && !error && (
+          <EmptyState message="No public POAPs to explore yet" />
         )}
 
         {/* Results */}
-        {isConnected && isAuthenticated && !isLoading && poaps.length > 0 && (
+        {!isLoading && poaps.length > 0 && (
           <div className="space-y-6">
             {poaps.map(poap => (
               <POAPCard key={poap.id} poap={poap} />

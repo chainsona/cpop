@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { getOperatingSystem } from './navigation-menu';
+import { getOperatingSystem } from '@/lib/utils/os-detection';
 
 type NavigationContextType = {
   isNavigationOpen: boolean;

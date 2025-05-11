@@ -35,6 +35,8 @@ interface ClaimStatus {
   expired: boolean;
   poap: POAP | null;
   message: string;
+  claimTimestamp?: string;
+  claimTxId?: string;
 }
 
 // Function to format wallet address with ellipsis
@@ -108,6 +110,17 @@ export default function ClaimPage() {
       setWalletAddress(connectedWalletAddress);
     }
   }, [isConnected, connectedWalletAddress, useManualAddress]);
+
+  // Auto-redirect to wallet page after 10 seconds when claimed
+  useEffect(() => {
+    if (claimStatus?.claimed) {
+      const redirectTimer = setTimeout(() => {
+        router.push('/wallet');
+      }, 10000);
+      
+      return () => clearTimeout(redirectTimer);
+    }
+  }, [router, claimStatus?.claimed]);
 
   const handleClaim = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -207,10 +220,11 @@ export default function ClaimPage() {
                     alt={claimStatus.poap.title}
                     fill
                     className="object-cover"
+                    unoptimized
                   />
                 ) : (
-                  <div className="w-full h-full bg-neutral-200 flex items-center justify-center">
-                    <Trophy className="h-12 w-12 text-neutral-400" />
+                  <div className="w-full h-full bg-blue-50 flex items-center justify-center">
+                    <Trophy className="h-12 w-12 text-blue-500" />
                   </div>
                 )}
               </div>
@@ -221,9 +235,27 @@ export default function ClaimPage() {
             </div>
           )}
           
-          <Link href="/">
-            <Button variant="outline">Return Home</Button>
-          </Link>
+          {claimStatus.claimTxId && (
+            <div className="w-full text-center mb-4">
+              <a 
+                href={`https://explorer.solana.com/tx/${claimStatus.claimTxId}?cluster=${process.env.NEXT_PUBLIC_SOLANA_CLUSTER || 'mainnet'}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm text-blue-600 hover:underline"
+              >
+                View transaction on Solana Explorer
+              </a>
+            </div>
+          )}
+          
+          <div className="w-full space-y-4">
+            <Link href="/wallet" className="w-full block">
+              <Button variant="outline" className="w-full">View in Wallet</Button>
+            </Link>
+            <p className="text-xs text-center text-neutral-500">
+              Redirecting to wallet in 10 seconds...
+            </p>
+          </div>
         </div>
       </div>
     );
@@ -248,10 +280,11 @@ export default function ClaimPage() {
                     alt={claimStatus.poap.title}
                     fill
                     className="object-cover"
+                    unoptimized
                   />
                 ) : (
-                  <div className="w-full h-full bg-neutral-200 flex items-center justify-center">
-                    <Trophy className="h-12 w-12 text-neutral-400" />
+                  <div className="w-full h-full bg-blue-50 flex items-center justify-center">
+                    <Trophy className="h-12 w-12 text-blue-500" />
                   </div>
                 )}
               </div>
@@ -289,10 +322,11 @@ export default function ClaimPage() {
                       alt={claimStatus.poap.title}
                       fill
                       className="object-cover"
+                      unoptimized
                     />
                   ) : (
-                    <div className="w-full h-full bg-neutral-200 flex items-center justify-center">
-                      <Trophy className="h-16 w-16 text-neutral-400" />
+                    <div className="w-full h-full bg-blue-50 flex items-center justify-center">
+                      <Trophy className="h-16 w-16 text-blue-500" />
                     </div>
                   )}
                 </div>

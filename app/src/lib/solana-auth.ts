@@ -1,10 +1,10 @@
-import { PublicKey } from "@solana/web3.js";
-import bs58 from "bs58";
-import { Message } from "@solana/web3.js";
-import { getServerSession } from "next-auth/next";
-import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "./db";
-import { authOptions } from "./auth";
+import { PublicKey } from '@solana/web3.js';
+import bs58 from 'bs58';
+import { Message } from '@solana/web3.js';
+import { getServerSession } from 'next-auth/next';
+import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from './db';
+import { authOptions } from './auth';
 import nacl from 'tweetnacl';
 
 export interface SignatureMessage {
@@ -12,7 +12,6 @@ export interface SignatureMessage {
   address: string;
   statement: string;
   nonce: string;
-  version: string;
   issuedAt: string;
   expirationTime: string;
   notBefore: string;
@@ -27,7 +26,7 @@ export interface SolanaSignInMessage {
 }
 
 // Add cache to prevent repeated verification of the same invalid tokens
-const TOKEN_VALIDATION_CACHE = new Map<string, {isValid: boolean, timestamp: number}>();
+const TOKEN_VALIDATION_CACHE = new Map<string, { isValid: boolean; timestamp: number }>();
 const CACHE_TTL = 60000; // 1 minute cache TTL
 
 // Clear expired entries from the cache periodically
@@ -57,14 +56,14 @@ function validateTokenStructure(token: string): boolean {
       // Cache entry expired, remove it
       TOKEN_VALIDATION_CACHE.delete(token);
     }
-    
+
     // Basic validation of token format
     if (!token || token.length < 10) {
       console.log('Token validation failed: token too short');
-      TOKEN_VALIDATION_CACHE.set(token, {isValid: false, timestamp: Date.now()});
+      TOKEN_VALIDATION_CACHE.set(token, { isValid: false, timestamp: Date.now() });
       return false;
     }
-    
+
     let tokenData;
     try {
       // Try to parse as base64
@@ -75,52 +74,52 @@ function validateTokenStructure(token: string): boolean {
         tokenData = JSON.parse(token);
       } catch (e2) {
         console.log('Token validation failed: invalid JSON', e, e2);
-        TOKEN_VALIDATION_CACHE.set(token, {isValid: false, timestamp: Date.now()});
+        TOKEN_VALIDATION_CACHE.set(token, { isValid: false, timestamp: Date.now() });
         return false;
       }
     }
-    
+
     // Check required fields
     if (!tokenData.message || typeof tokenData.message !== 'object') {
       console.log('Token validation failed: missing message object');
-      TOKEN_VALIDATION_CACHE.set(token, {isValid: false, timestamp: Date.now()});
+      TOKEN_VALIDATION_CACHE.set(token, { isValid: false, timestamp: Date.now() });
       return false;
     }
-    
+
     if (!tokenData.signature || typeof tokenData.signature !== 'string') {
       console.log('Token validation failed: missing signature string');
-      TOKEN_VALIDATION_CACHE.set(token, {isValid: false, timestamp: Date.now()});
+      TOKEN_VALIDATION_CACHE.set(token, { isValid: false, timestamp: Date.now() });
       return false;
     }
-    
+
     // Check message structure
     const msg = tokenData.message;
     if (!msg.address || !msg.statement || !msg.nonce || !msg.issuedAt || !msg.expirationTime) {
       console.log('Token validation failed: incomplete message structure');
-      TOKEN_VALIDATION_CACHE.set(token, {isValid: false, timestamp: Date.now()});
+      TOKEN_VALIDATION_CACHE.set(token, { isValid: false, timestamp: Date.now() });
       return false;
     }
-    
+
     // Validate expiration time
     try {
       const expTime = new Date(msg.expirationTime);
       if (expTime < new Date()) {
         console.log('Token validation failed: token expired');
-        TOKEN_VALIDATION_CACHE.set(token, {isValid: false, timestamp: Date.now()});
+        TOKEN_VALIDATION_CACHE.set(token, { isValid: false, timestamp: Date.now() });
         return false;
       }
     } catch (e) {
       console.log('Token validation failed: invalid expiration format');
-      TOKEN_VALIDATION_CACHE.set(token, {isValid: false, timestamp: Date.now()});
+      TOKEN_VALIDATION_CACHE.set(token, { isValid: false, timestamp: Date.now() });
       return false;
     }
-    
+
     // All validation passed
-    TOKEN_VALIDATION_CACHE.set(token, {isValid: true, timestamp: Date.now()});
+    TOKEN_VALIDATION_CACHE.set(token, { isValid: true, timestamp: Date.now() });
     return true;
   } catch (e) {
     console.error('Unexpected error in token validation:', e);
-    TOKEN_VALIDATION_CACHE.set(token, {isValid: false, timestamp: Date.now()});
+    TOKEN_VALIDATION_CACHE.set(token, { isValid: false, timestamp: Date.now() });
     return false;
   }
 }
@@ -130,25 +129,23 @@ function validateTokenStructure(token: string): boolean {
  */
 export function createSignatureMessage(walletAddress: string): SignatureMessage {
   const domain = typeof window !== 'undefined' ? window.location.host : '';
-  const statement = "Sign in to the application with your Solana wallet";
-  
+  const statement = 'Sign in to POAP with your Solana wallet';
+
   // Create a random nonce for this login request
   const nonce = generateNonce();
   const now = new Date();
   // Change from 30 minutes to 7 days (7 * 24 * 60 * 60 * 1000)
   const sevenDaysLater = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-  
+
   // Create the signature message
   return {
     domain,
     address: walletAddress,
     statement,
     nonce,
-    version: "1",
     issuedAt: now.toISOString(),
     expirationTime: sevenDaysLater.toISOString(),
     notBefore: now.toISOString(),
-    chainId: "solana:mainnet",
   };
 }
 
@@ -166,7 +163,7 @@ function generateNonce(): string {
       buffer[i] = Math.floor(Math.random() * 256);
     }
   }
-  
+
   // Convert the buffer to a base58 string
   return bs58.encode(buffer);
 }
@@ -184,55 +181,55 @@ export async function verifySignature(
     console.log('Signature received in verifySignature:', {
       signatureType: typeof signature,
       signatureLength: signature.length,
-      signaturePrefix: signature.substring(0, 10)
+      signaturePrefix: signature.substring(0, 10),
     });
-    
+
     // Verify that the message was signed by the wallet
     const publicKey = new PublicKey(walletAddress);
     const encodedMessage = new TextEncoder().encode(JSON.stringify(message));
-    
+
     // Try to decode the signature from base64 (how it's stored from the UI)
     try {
       // Decode from base64 (matching our UI encoding)
       const signatureUint8 = new Uint8Array(Buffer.from(signature, 'base64'));
-      
+
       console.log('Decoded signature from base64:', {
         length: signatureUint8.length,
-        prefix: Buffer.from(signatureUint8.slice(0, 5)).toString('hex')
+        prefix: Buffer.from(signatureUint8.slice(0, 5)).toString('hex'),
       });
-      
+
       // Verify the signature
       const verified = await verifyMessageSignature(publicKey, encodedMessage, signatureUint8);
       console.log('Signature verification result:', verified);
       return verified;
     } catch (base64Error) {
       console.error('Base64 decode failed:', base64Error);
-      
+
       // Try alternative decodings if needed
       try {
         // Try hex format
         let signatureUint8: Uint8Array;
-        
+
         // If signature starts with 0x (hex format), remove it
         let cleanedSignature = signature;
         if (cleanedSignature.startsWith('0x')) {
           cleanedSignature = cleanedSignature.slice(2);
         }
-        
+
         try {
           // Try base58 decode
           signatureUint8 = bs58.decode(cleanedSignature);
           console.log('Decoded signature from base58:', {
-            length: signatureUint8.length
+            length: signatureUint8.length,
           });
         } catch (e) {
           // Try hex decode
           signatureUint8 = new Uint8Array(Buffer.from(cleanedSignature, 'hex'));
           console.log('Decoded signature from hex:', {
-            length: signatureUint8.length
+            length: signatureUint8.length,
           });
         }
-        
+
         // Verify with the decoded format
         const verified = await verifyMessageSignature(publicKey, encodedMessage, signatureUint8);
         console.log('Fallback signature verification result:', verified);
@@ -243,7 +240,7 @@ export async function verifySignature(
       }
     }
   } catch (error) {
-    console.error("Error verifying signature:", error);
+    console.error('Error verifying signature:', error);
     return false;
   }
 }
@@ -261,25 +258,21 @@ async function verifyMessageSignature(
     console.log('Verification inputs:', {
       publicKeyBase58: publicKey.toBase58().substring(0, 10) + '...',
       messageLength: message.length,
-      signatureLength: signature.length
+      signatureLength: signature.length,
     });
-    
+
     // Most common verification method for Solana wallets - hash the message first
     const messageHash = await crypto.subtle.digest('SHA-256', message);
     const messageHashArray = new Uint8Array(messageHash);
-    
+
     // Verify using ed25519
-    const verified = nacl.sign.detached.verify(
-      messageHashArray,
-      signature,
-      publicKey.toBytes()
-    );
-    
+    const verified = nacl.sign.detached.verify(messageHashArray, signature, publicKey.toBytes());
+
     if (verified) {
       console.log('Signature verified with standard ed25519 method');
       return true;
     }
-    
+
     // If standard verification failed, try an alternative approach
     // Some wallets might sign the message directly without hashing
     try {
@@ -288,7 +281,7 @@ async function verifyMessageSignature(
         signature,
         publicKey.toBytes()
       );
-      
+
       if (alternativeVerified) {
         console.log('Signature verified with alternative direct method');
         return true;
@@ -296,7 +289,7 @@ async function verifyMessageSignature(
     } catch (e) {
       console.log('Alternative verification failed:', e);
     }
-    
+
     // If both methods failed and we have a 64-byte signature from a valid public key,
     // consider accepting it with basic validation for compatibility with some wallets
     if (PublicKey.isOnCurve(publicKey.toBytes()) && signature.length === 64) {
@@ -305,11 +298,11 @@ async function verifyMessageSignature(
       console.log('Using basic signature validation - signature has correct format');
       return true;
     }
-    
+
     console.log('All verification methods failed');
     return false;
   } catch (error) {
-    console.error("Error in verifyMessageSignature:", error);
+    console.error('Error in verifyMessageSignature:', error);
     return false;
   }
 }
@@ -326,46 +319,50 @@ export async function solanaAuthMiddleware(
   if (session) {
     // User is already authenticated with NextAuth
     // Check if they're using a different wallet now
-    const authorization = req.headers.get("authorization");
-    const cookieToken = req.cookies.get("solana_auth_token")?.value;
-    
+    const authorization = req.headers.get('authorization');
+    const cookieToken = req.cookies.get('solana_auth_token')?.value;
+
     if (authorization || cookieToken) {
       try {
         // Parse the wallet address from the token
         let token = '';
-        
-        if (authorization && authorization.startsWith("Solana ")) {
-          token = authorization.replace("Solana ", "");
+
+        if (authorization && authorization.startsWith('Solana ')) {
+          token = authorization.replace('Solana ', '');
         } else if (authorization) {
           token = authorization;
         } else if (cookieToken) {
           token = cookieToken;
         }
-        
+
         if (token && validateTokenStructure(token)) {
-          const signInMessage = JSON.parse(Buffer.from(token, "base64").toString());
+          const signInMessage = JSON.parse(Buffer.from(token, 'base64').toString());
           const walletAddress = signInMessage.message.address;
-          
+
           // If the wallet address is different from the one in the session,
           // it could be a security issue - invalidate the current session
           if (session.user.walletAddress && session.user.walletAddress !== walletAddress) {
-            console.log('Wallet address mismatch detected. Session wallet:', 
-              session.user.walletAddress, 'Auth token wallet:', walletAddress);
-            
+            console.log(
+              'Wallet address mismatch detected. Session wallet:',
+              session.user.walletAddress,
+              'Auth token wallet:',
+              walletAddress
+            );
+
             // Create a new response with expired auth cookie
             const response = NextResponse.json(
-              { error: "Session invalidated due to wallet address change" },
+              { error: 'Session invalidated due to wallet address change' },
               { status: 401 }
             );
-            
+
             // Clear the auth cookie
-            response.cookies.set('solana_auth_token', '', { 
+            response.cookies.set('solana_auth_token', '', {
               httpOnly: true,
               secure: process.env.NODE_ENV === 'production',
               maxAge: 0, // Expire immediately
               path: '/',
             });
-            
+
             // Set a wallet_address_changed flag cookie
             response.cookies.set('wallet_address_changed', 'true', {
               httpOnly: false, // We want this cookie to be readable by JavaScript
@@ -373,28 +370,28 @@ export async function solanaAuthMiddleware(
               maxAge: 60 * 10, // 10 minutes
               path: '/',
             });
-            
+
             return response;
           }
         }
       } catch (error) {
-        console.error("Error checking wallet address:", error);
+        console.error('Error checking wallet address:', error);
         // Continue with the request even if there's an error here
       }
     }
-    
+
     // Wallet address is the same or not provided, allow the request
     return next();
   }
 
   // Check for Solana wallet signature in various places
-  const authorization = req.headers.get("authorization");
-  const cookieToken = req.cookies.get("solana_auth_token")?.value;
-  
+  const authorization = req.headers.get('authorization');
+  const cookieToken = req.cookies.get('solana_auth_token')?.value;
+
   if (!authorization && !cookieToken) {
     console.log('Auth middleware: No token found in request');
     return NextResponse.json(
-      { error: "Unauthorized: Missing authentication token" },
+      { error: 'Unauthorized: Missing authentication token' },
       { status: 401 }
     );
   }
@@ -402,9 +399,9 @@ export async function solanaAuthMiddleware(
   try {
     // Parse the authorization from either header or cookie
     let token = '';
-    
-    if (authorization && authorization.startsWith("Solana ")) {
-      token = authorization.replace("Solana ", "");
+
+    if (authorization && authorization.startsWith('Solana ')) {
+      token = authorization.replace('Solana ', '');
       console.log('Auth middleware: Using Authorization header token');
     } else if (authorization) {
       // Try using the raw authorization header
@@ -415,33 +412,30 @@ export async function solanaAuthMiddleware(
       token = cookieToken;
       console.log('Auth middleware: Using cookie token');
     }
-    
+
     // Ensure the token is not empty
     if (!token) {
       console.log('Auth middleware: Empty token after processing');
       return NextResponse.json(
-        { error: "Unauthorized: Invalid authentication token" },
+        { error: 'Unauthorized: Invalid authentication token' },
         { status: 401 }
       );
     }
-    
+
     // Validate token structure first
     if (!validateTokenStructure(token)) {
-      return NextResponse.json(
-        { error: "Unauthorized: Invalid token format" },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: 'Unauthorized: Invalid token format' }, { status: 401 });
     }
-    
+
     // Parse the token
     let signInMessage: SolanaSignInMessage;
     try {
-      signInMessage = JSON.parse(Buffer.from(token, "base64").toString());
+      signInMessage = JSON.parse(Buffer.from(token, 'base64').toString());
       console.log('Auth middleware: Parsed signInMessage', signInMessage);
     } catch (parseError) {
       // Shouldn't reach here as validateTokenStructure already checked this
       return NextResponse.json(
-        { error: "Unauthorized: Malformed authentication token" },
+        { error: 'Unauthorized: Malformed authentication token' },
         { status: 401 }
       );
     }
@@ -460,12 +454,9 @@ export async function solanaAuthMiddleware(
         address: signInMessage.message.address,
         nonce: signInMessage.message.nonce,
         signatureLength: signInMessage.signature.length,
-        signaturePrefix: signInMessage.signature.substring(0, 10)
+        signaturePrefix: signInMessage.signature.substring(0, 10),
       });
-      return NextResponse.json(
-        { error: "Unauthorized: Invalid signature" },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: 'Unauthorized: Invalid signature' }, { status: 401 });
     }
 
     // Success case: log the successful authentication details
@@ -473,14 +464,14 @@ export async function solanaAuthMiddleware(
       address: signInMessage.message.address,
       signatureLength: signInMessage.signature.length,
       noncePrefix: signInMessage.message.nonce.substring(0, 8),
-      expiresAt: signInMessage.message.expirationTime
+      expiresAt: signInMessage.message.expirationTime,
     });
 
     // Since there's no User model in the Prisma schema, we'll store wallet info in the request
     // for downstream handlers to use
     const walletAddress = signInMessage.message.address;
     console.log('Auth middleware: Valid auth for wallet', walletAddress);
-    
+
     // Attach the wallet to the request object for the API route to handle
     (req as any).wallet = {
       address: walletAddress,
@@ -490,10 +481,10 @@ export async function solanaAuthMiddleware(
     // Continue to the API route
     return next();
   } catch (error) {
-    console.error("Error in solanaAuthMiddleware:", error);
+    console.error('Error in solanaAuthMiddleware:', error);
     return NextResponse.json(
-      { error: "Unauthorized: Invalid authentication", details: (error as Error).message },
+      { error: 'Unauthorized: Invalid authentication', details: (error as Error).message },
       { status: 401 }
     );
   }
-} 
+}

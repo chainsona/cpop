@@ -1,0 +1,55 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from '@/lib/db';
+
+type Params = Promise<{
+  id: string;
+}>;
+
+// Get public POAP details by ID without requiring authentication
+export async function GET(request: NextRequest, { params }: { params: Params }) {
+  try {
+    const { id } = await params;
+
+    // Fetch POAP from database with minimal info for public viewing
+    const poap = await prisma.poap.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        imageUrl: true,
+        website: true,
+        startDate: true,
+        endDate: true,
+        status: true,
+        createdAt: true,
+        updatedAt: true,
+        settings: {
+          select: {
+            visibility: true,
+          },
+        },
+      },
+    });
+
+    if (!poap) {
+      return NextResponse.json({ error: 'POAP not found' }, { status: 404 });
+    }
+
+    // Only return POAPs that are public
+    if (poap.settings?.visibility !== 'Public') {
+      return NextResponse.json({ error: 'This POAP is not publicly accessible' }, { status: 403 });
+    }
+
+    return NextResponse.json({ poap });
+  } catch (error) {
+    console.error('Error fetching public POAP details:', error);
+    return NextResponse.json(
+      {
+        error: 'Failed to fetch POAP details',
+        message: error instanceof Error ? error.message : 'An unknown error occurred',
+      },
+      { status: 500 }
+    );
+  }
+}

@@ -5,13 +5,14 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { isBase64Image } from '@/lib/poap-utils';
 import { POAPCard } from '@/components/poap/poap-card';
-import { Base64Warning } from '@/components/poap/base64-warning';
 import { EmptyState } from '@/components/poap/empty-state';
 import { PoapItem } from '@/types/poap';
 import { fetchWithAuth } from '@/lib/api-client';
 import { Loader2 } from 'lucide-react';
 import { useWalletContext } from '@/contexts/wallet-context';
 import { ConnectWallet } from '@/components/wallet/connect-wallet';
+import { CreateExamplePOAP } from '@/components/poap/create-example-poap';
+import { usePageTitle } from '@/contexts/page-title-context';
 
 // Rate limiting - Track failed auth attempts
 const AUTH_FAILURE_COOLDOWN = 10000; // 10 seconds cooldown after auth failure
@@ -25,10 +26,20 @@ export default function POAPListPage() {
   const { isConnected, walletAddress, connect } = useWalletContext();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [authInCooldown, setAuthInCooldown] = useState(false);
+  const { setPageTitle } = usePageTitle();
 
   // Use refs to track current state without triggering re-renders
   const isAuthenticatedRef = useRef(isAuthenticated);
   const isConnectedRef = useRef(isConnected);
+
+  // Set page title
+  useEffect(() => {
+    setPageTitle('My POAPs');
+    
+    return () => {
+      setPageTitle('');
+    };
+  }, [setPageTitle]);
 
   // Update refs when state changes
   useEffect(() => {
@@ -198,8 +209,9 @@ export default function POAPListPage() {
   return (
     <div className="container mx-auto py-10">
       <div className="flex justify-between items-center mb-8">
-        <h1 className="text-3xl font-bold">POAPs</h1>
+        <h1 className="text-3xl font-bold">My POAPs</h1>
         <div className="flex gap-2">
+          <CreateExamplePOAP />
           <Link href="/poaps/create">
             <Button>Create POAP</Button>
           </Link>
@@ -228,9 +240,6 @@ export default function POAPListPage() {
           <p>Too many authentication failures. Waiting before trying again.</p>
         </div>
       )}
-
-      {/* Display base64 warning if needed */}
-      {base64ImageCount > 0 && <Base64Warning count={base64ImageCount} />}
 
       {/* Show authentication prompt */}
       {isConnected && !isAuthenticated && !authInCooldown && (

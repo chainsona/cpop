@@ -1,6 +1,9 @@
 'use client';
 
-import { createContext, useState, useContext, ReactNode } from 'react';
+import { createContext, useState, useContext, ReactNode, useEffect } from 'react';
+
+// App name constant to ensure consistency
+const APP_NAME = 'POAP';
 
 type PageTitleContextType = {
   pageTitle: string;
@@ -11,6 +14,15 @@ const PageTitleContext = createContext<PageTitleContextType | undefined>(undefin
 
 export function PageTitleProvider({ children }: { children: ReactNode }) {
   const [pageTitle, setPageTitle] = useState<string>('');
+
+  // Update document title when pageTitle changes
+  useEffect(() => {
+    if (pageTitle) {
+      document.title = `${pageTitle} | ${APP_NAME}`;
+    } else {
+      document.title = APP_NAME;
+    }
+  }, [pageTitle]);
 
   return (
     <PageTitleContext.Provider value={{ pageTitle, setPageTitle }}>

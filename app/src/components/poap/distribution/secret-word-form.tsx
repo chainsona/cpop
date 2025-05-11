@@ -9,9 +9,13 @@ import { StepIndicator } from './step-indicator';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
 import { PasswordInput } from '@/components/ui/password-input';
+import { PasswordStrength } from '@/components/ui/password-strength';
 import { SecretWordDisplay } from './secret-word-display';
 import { Coins, Loader2 } from 'lucide-react';
 import Link from 'next/link';
+import { POAPMintModal } from '@/components/poap/poap-mint-modal';
+import { usePOAPMintModal } from '@/hooks/use-poap-mint-modal';
+import { pollForTokenMintStatus } from '@/lib/mint-tokens-utils';
 
 interface SecretWordFormProps {
   id: string;
@@ -29,13 +33,16 @@ export function SecretWordForm({ id, onSuccess }: SecretWordFormProps) {
   const [isLoadingPoap, setIsLoadingPoap] = React.useState(false);
   const [isMinting, setIsMinting] = React.useState(false);
   const [mintProgress, setMintProgress] = React.useState<string>('');
+  const { modalState, openMintingModal, setMintSuccess, setMintError, onOpenChange } = usePOAPMintModal();
 
   // Fetch POAP details to get dates
   React.useEffect(() => {
     const fetchPoapDetails = async () => {
       try {
         setIsLoadingPoap(true);
-        const response = await fetch(`/api/poaps/${id}`);
+        const response = await fetch(`/api/poaps/${id}`, {
+          credentials: 'include'
+        });
 
         if (!response.ok) {
           throw new Error('Failed to fetch POAP details');
@@ -66,7 +73,9 @@ export function SecretWordForm({ id, onSuccess }: SecretWordFormProps) {
   // Function to check if token was minted
   const checkTokenMinted = async (): Promise<{ minted: boolean; mintAddress?: string }> => {
     try {
-      const response = await fetch(`/api/poaps/${id}`);
+      const response = await fetch(`/api/poaps/${id}`, {
+        credentials: 'include'
+      });
       if (!response.ok) {
         throw new Error('Failed to check token status');
       }
@@ -91,6 +100,7 @@ export function SecretWordForm({ id, onSuccess }: SecretWordFormProps) {
         headers: {
           'Content-Type': 'application/json',
         },
+        credentials: 'include',
         body: JSON.stringify({
           type: 'SecretWord',
           word,
@@ -117,20 +127,17 @@ export function SecretWordForm({ id, onSuccess }: SecretWordFormProps) {
       const initialStatus = await checkTokenMinted();
 
       if (!initialStatus.minted) {
-        // If no token exists, show minting in progress indicator
+        // If no token exists, show minting progress indicator
         setMintProgress('Minting POAP tokens...');
+        openMintingModal();
 
-        // Poll for token creation (every 3 seconds for up to 30 seconds)
-        let attempts = 0;
-        const maxAttempts = 10;
-        const interval = setInterval(async () => {
-          attempts++;
-          const status = await checkTokenMinted();
-
-          if (status.minted) {
-            clearInterval(interval);
+        // Start polling for token minting
+        pollForTokenMintStatus({
+          poapId: id,
+          onMinted: () => {
             setIsMinting(false);
-
+            setMintSuccess();
+            
             // Show success toast with link to token tab
             toast.success(
               <div className="flex flex-col gap-2">
@@ -144,12 +151,13 @@ export function SecretWordForm({ id, onSuccess }: SecretWordFormProps) {
                 </Link>
               </div>
             );
-          } else if (attempts >= maxAttempts) {
-            clearInterval(interval);
+          },
+          onTimeout: () => {
             setIsMinting(false);
+            setMintError('Timeout waiting for token minting');
             console.log('Timeout waiting for token minting');
           }
-        }, 3000);
+        });
       } else {
         setIsMinting(false);
       }
@@ -191,6 +199,7 @@ export function SecretWordForm({ id, onSuccess }: SecretWordFormProps) {
               showPasswordByDefault={false}
               iconSize={18}
             />
+            <PasswordStrength password={word} />
             <p className="text-sm text-neutral-500 mt-2">
               Make it memorable but not too easy to guess
             </p>
@@ -308,6 +317,14 @@ export function SecretWordForm({ id, onSuccess }: SecretWordFormProps) {
           )}
         </div>
       )}
+
+      <POAPMintModal
+        open={modalState.open}
+        onOpenChange={onOpenChange}
+        status={modalState.status}
+        error={modalState.error}
+        poapId={id}
+      />
     </div>
   );
 }

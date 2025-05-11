@@ -17,6 +17,8 @@ model User {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
   poaps         Poap[]
+
+  @@index([walletAddress])
 }
 
 model Poap {
@@ -34,9 +36,13 @@ model Poap {
   creatorId           String?
   attributes          Attributes?
   distributionMethods DistributionMethod[]
+  claims              POAPClaim[]
   creator             User?                @relation(fields: [creatorId], references: [id])
   tokens              PoapToken[]
   settings            Settings?
+
+  @@index([creatorId])
+  @@index([status])
 }
 
 model DistributionMethod {
@@ -51,7 +57,13 @@ model DistributionMethod {
   claimLinks    ClaimLink[]
   poap          Poap             @relation(fields: [poapId], references: [id], onDelete: Cascade)
   locationBased LocationBased?
+  claims        POAPClaim[]
   secretWord    SecretWord?
+
+  @@index([poapId])
+  @@index([type])
+  @@index([disabled])
+  @@index([deleted])
 }
 
 model ClaimLink {
@@ -66,6 +78,10 @@ model ClaimLink {
   claimedByWallet      String?
   transactionSignature String?
   distributionMethod   DistributionMethod @relation(fields: [distributionMethodId], references: [id], onDelete: Cascade)
+
+  @@index([distributionMethodId])
+  @@index([claimed])
+  @@index([claimedAt])
 }
 
 model SecretWord {
@@ -86,8 +102,8 @@ model LocationBased {
   distributionMethodId String             @unique
   city                 String
   country              String?
-  latitude             Float?
-  longitude            Float?
+  latitude             Float
+  longitude            Float
   radius               Int                @default(500)
   maxClaims            Int?
   claimCount           Int                @default(0)
@@ -124,6 +140,8 @@ model Attributes {
   artists      Artist[]
   poap         Poap          @relation(fields: [poapId], references: [id], onDelete: Cascade)
   organization Organization?
+
+  @@index([poapId])
 }
 
 model Artist {
@@ -134,6 +152,8 @@ model Artist {
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
   attributes   Attributes @relation(fields: [attributesId], references: [id], onDelete: Cascade)
+
+  @@index([attributesId])
 }
 
 model Organization {
@@ -158,19 +178,38 @@ model Settings {
   createdAt        DateTime   @default(now())
   updatedAt        DateTime   @updatedAt
   poap             Poap       @relation(fields: [poapId], references: [id], onDelete: Cascade)
+
+  @@index([poapId])
 }
 
 model PoapToken {
   id                String    @id @default(uuid())
   poapId            String
   mintAddress       String    @unique
-  supply            Int
-  decimals          Int       @default(0)
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
   metadataUri       String?
   metadataUpdatedAt DateTime?
   poap              Poap      @relation(fields: [poapId], references: [id], onDelete: Cascade)
+
+  @@index([poapId])
+}
+
+model POAPClaim {
+  id                   String             @id @default(cuid())
+  poapId               String
+  walletAddress        String
+  distributionMethodId String
+  transactionSignature String?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+  distributionMethod   DistributionMethod @relation(fields: [distributionMethodId], references: [id], onDelete: Cascade)
+  poap                 Poap               @relation(fields: [poapId], references: [id], onDelete: Cascade)
+
+  @@unique([poapId, walletAddress])
+  @@index([poapId])
+  @@index([walletAddress])
+  @@index([distributionMethodId])
 }
 
 enum PoapStatus {
@@ -178,6 +217,7 @@ enum PoapStatus {
   Published
   Distributed
   Unclaimable
+  Disabled
 }
 
 enum DistributionType {
