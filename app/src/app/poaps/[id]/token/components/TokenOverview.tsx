@@ -31,7 +31,7 @@ export const TokenOverview = ({
   fetchBlockchainTokenData,
 }: TokenOverviewProps) => {
   const cluster = process.env.NEXT_PUBLIC_SOLANA_CLUSTER || 'mainnet';
-  
+
   return (
     <Card>
       <CardHeader>
@@ -39,9 +39,7 @@ export const TokenOverview = ({
           <Coins className="h-5 w-5 text-blue-500 mr-2" />
           Token Overview
         </CardTitle>
-        <CardDescription>
-          Information about your POAP's compressed token
-        </CardDescription>
+        <CardDescription>Information about your POAP's compressed token</CardDescription>
       </CardHeader>
       <CardContent>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -63,30 +61,20 @@ export const TokenOverview = ({
                       {isBlockchainLoading ? (
                         <RefreshCcw className="h-3 w-3 animate-spin text-neutral-400" />
                       ) : blockchainError ? (
-                        <span title={blockchainError}>
-                          {formatNumber(token.available || 0)}*
-                        </span>
+                        <span title={blockchainError}>{formatNumber(token.available || 0)}*</span>
                       ) : (
-                        formatNumber(
-                          blockchainData?.authorityBalance ||
-                            token.available ||
-                            0
-                        )
+                        formatNumber(blockchainData?.authorityBalance || token.available || 0)
                       )}
                     </Badge>
                   </div>
 
                   <div className="flex justify-between items-center p-3 bg-purple-50 rounded-md">
-                    <span className="text-purple-700 font-medium">
-                      Distributed Tokens
-                    </span>
+                    <span className="text-purple-700 font-medium">Distributed Tokens</span>
                     <Badge variant="outline" className="bg-purple-100 text-purple-700">
                       {isBlockchainLoading ? (
                         <RefreshCcw className="h-3 w-3 animate-spin text-neutral-400" />
                       ) : blockchainError ? (
-                        <span title={blockchainError}>
-                          {formatNumber(token.available || 0)}*
-                        </span>
+                        <span title={blockchainError}>{formatNumber(token.available || 0)}*</span>
                       ) : (
                         formatNumber(blockchainData?.distributedTokens || 0)
                       )}
@@ -114,9 +102,7 @@ export const TokenOverview = ({
 
           {token && (
             <div>
-              <h3 className="text-sm font-medium text-neutral-500 mb-2">
-                Token Information
-              </h3>
+              <h3 className="text-sm font-medium text-neutral-500 mb-2">Token Information</h3>
               <div className="space-y-2">
                 <div className="p-3 bg-neutral-50 rounded-md">
                   <p className="text-sm text-neutral-500 mb-1">Mint Address</p>
@@ -137,7 +123,12 @@ export const TokenOverview = ({
                       variant="ghost"
                       size="sm"
                       className="p-1 h-auto"
-                      onClick={() => window.open(`https://explorer.solana.com/address/${token.mintAddress}?cluster=${cluster}`, '_blank')}
+                      onClick={() =>
+                        window.open(
+                          `https://explorer.solana.com/address/${token.mintAddress}?cluster=${cluster}`,
+                          '_blank'
+                        )
+                      }
                       title="View on Solana Explorer"
                     >
                       <ExternalLink className="h-3.5 w-3.5" />
@@ -147,9 +138,7 @@ export const TokenOverview = ({
 
                 <div className="p-3 bg-neutral-50 rounded-md">
                   <p className="text-sm text-neutral-500 mb-1">Created</p>
-                  <p className="text-sm">
-                    {new Date(token.createdAt || '').toLocaleString()}
-                  </p>
+                  <p className="text-sm">{new Date(token.createdAt || '').toLocaleString()}</p>
                 </div>
               </div>
             </div>
@@ -164,4 +153,4 @@ export const TokenOverview = ({
       </CardFooter>
     </Card>
   );
-}; 
+};

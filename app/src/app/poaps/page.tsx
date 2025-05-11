@@ -1,16 +1,13 @@
 'use client';
 
 import { useEffect, useState, useCallback, useRef } from 'react';
-import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { isBase64Image } from '@/lib/poap-utils';
 import { POAPCard } from '@/components/poap/poap-card';
 import { EmptyState } from '@/components/poap/empty-state';
 import { PoapItem } from '@/types/poap';
 import { fetchWithAuth } from '@/lib/api-client';
 import { Loader2, Plus, Award } from 'lucide-react';
 import { useWalletContext } from '@/contexts/wallet-context';
-import { ConnectWallet } from '@/components/wallet/connect-wallet';
 import { CreateExamplePOAP } from '@/components/poap/create-example-poap';
 import { Container } from '@/components/ui/container';
 import { PageHeader } from '@/components/ui/page-header';
@@ -37,22 +34,6 @@ export default function POAPListPage() {
     isAuthenticatedRef.current = isAuthenticated;
     isConnectedRef.current = isConnected;
   }, [isAuthenticated, isConnected]);
-
-  // Count how many base64 images are present
-  const base64ImageCount = poaps.filter(poap => isBase64Image(poap.imageUrl)).length;
-
-  // Handle auth state changes from the ConnectWallet component
-  const handleAuthChange = useCallback((authState: boolean) => {
-    setIsAuthenticated(authState);
-
-    // When auth becomes successful, reset failure tracking
-    if (authState) {
-      setError(null);
-      authFailureCount = 0;
-      lastAuthFailure = 0;
-      setAuthInCooldown(false);
-    }
-  }, []);
 
   // Check if user is authenticated on initial load
   useEffect(() => {

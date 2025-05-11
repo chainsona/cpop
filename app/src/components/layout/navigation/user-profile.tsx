@@ -27,7 +27,7 @@ export function UserProfile({ user }: UserProfileProps) {
     <div className="bg-neutral-50 rounded-lg p-3 border border-neutral-100">
       <div className="flex items-center gap-3">
         <Avatar className="h-10 w-10 border-2 border-white shadow-sm">
-          {user.walletAddress && user.walletAddress !== '0x000...000' ? (
+          {user.walletAddress && user.walletAddress !== '11111111111111111111111111111111' ? (
             <div className="h-full w-full flex items-center justify-center bg-blue-100">
               <Wallet className="h-5 w-5 text-blue-600" />
             </div>
@@ -37,7 +37,7 @@ export function UserProfile({ user }: UserProfileProps) {
         </Avatar>
         <div className="flex-1 min-w-0">
           <h3 className="font-medium text-sm truncate">
-            {user.walletAddress && user.walletAddress !== '0x000...000'
+            {user.walletAddress && user.walletAddress !== '11111111111111111111111111111111'
               ? 'Solana Wallet'
               : user.name}
           </h3>
@@ -58,4 +58,4 @@ export function UserProfile({ user }: UserProfileProps) {
       </div>
     </div>
   );
-} 
+}

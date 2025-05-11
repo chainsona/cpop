@@ -40,7 +40,7 @@ const USER_STORAGE_KEY = 'userProfile';
 const DEFAULT_USER = {
   name: 'Guest User',
   email: 'guest@example.com',
-  walletAddress: '0x000...000',
+  walletAddress: '11111111111111111111111111111111',
   avatarUrl: '',
 };
 

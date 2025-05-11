@@ -1,4 +1,13 @@
-import { Hash, Calendar, Building, User, Coins, RefreshCcw, Copy, ExternalLink } from 'lucide-react';
+import {
+  Hash,
+  Calendar,
+  Building,
+  User,
+  Coins,
+  RefreshCcw,
+  Copy,
+  ExternalLink,
+} from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { InteractiveExternalLink } from '@/components/ui/interactive-link';
@@ -132,7 +141,12 @@ export function POAPInfoDisplay({
                 variant="ghost"
                 size="sm"
                 className="p-1 h-auto"
-                onClick={() => window.open(`https://explorer.solana.com/address/${poap.token?.mintAddress}?cluster=${cluster}`, '_blank')}
+                onClick={() =>
+                  window.open(
+                    `https://explorer.solana.com/address/${poap.token?.mintAddress}?cluster=${cluster}`,
+                    '_blank'
+                  )
+                }
                 title="View on Solana Explorer"
               >
                 <ExternalLink className="h-3.5 w-3.5" />
