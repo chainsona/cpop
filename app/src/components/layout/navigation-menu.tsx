@@ -98,11 +98,11 @@ export function NavigationMenu({
         </DialogHeader>
 
         {/* Desktop-optimized layout */}
-        <div className="flex flex-col space-y-6 md:space-y-0 md:flex-row md:gap-6 overflow-y-auto flex-1 p-6 pt-0">
+        <div className="flex flex-col space-y-6 md:space-y-0 md:flex-row md:gap-6 overflow-y-auto flex-1 p-6 pt-2">
           {/* Left sidebar - Navigation for desktop */}
           <div className="md:w-60 lg:w-72 space-y-4 order-2 md:order-1">
             {/* User profile card */}
-            <UserProfile user={user} />
+            {isAuthenticated ? <UserProfile user={user} /> : null}
 
             {/* Create New POAP Button */}
             <div>
