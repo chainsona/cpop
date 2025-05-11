@@ -306,25 +306,23 @@ export function AirdropForm({ id, onSuccess }: AirdropFormProps) {
 
       toast.success('Airdrop distribution created successfully');
 
-      // Check for token minting status
-      setIsMinting(true);
-      setMintProgress('Checking if tokens need to be minted...');
+      // Always check if this is the first distribution method
+      const isFirstDistributionMethod =
+        data.isFirstDistributionMethod || data.tokenMint?.shouldShowMintModal;
 
-      // Get initial token status
-      const initialStatus = await checkTokenMinted();
-
-      if (!initialStatus.minted) {
-        // If no token exists, show minting progress indicator
-        setMintProgress('Minting POAP tokens...');
+      // If this is the first distribution method or we should specifically show the mint modal
+      if (isFirstDistributionMethod) {
+        // Show minting modal immediately for first distribution method
+        setIsMinting(true);
         openMintingModal();
 
-        // Start polling for token minting
-        pollForTokenMintStatus({
-          poapId: id,
-          onMinted: () => {
-            setIsMinting(false);
+        // Check if token is already minted from server-side
+        if (data.tokenMint?.success) {
+          // Delay to show the minting animation for at least a second
+          setTimeout(() => {
             setMintSuccess();
-            
+            setIsMinting(false);
+
             // Show success toast with link to token tab
             toast.success(
               <div className="flex flex-col gap-2">
@@ -338,23 +336,177 @@ export function AirdropForm({ id, onSuccess }: AirdropFormProps) {
                 </Link>
               </div>
             );
-          },
-          onTimeout: () => {
-            setIsMinting(false);
-            setMintError('Timeout waiting for token minting');
-            console.log('Timeout waiting for token minting');
-          }
-        });
+
+            // Only refresh the page after mint is confirmed
+            router.refresh();
+
+            // Call the onSuccess callback if provided
+            if (onSuccess) {
+              onSuccess();
+            }
+          }, 1500);
+        } else {
+          // Need to mint token or check status
+          pollForTokenMintStatus({
+            poapId: id,
+            maxAttempts: 15, // Increased attempts
+            intervalMs: 2000, // More frequent checks
+            onProgress: message => {
+              setMintProgress(message);
+            },
+            onMinted: () => {
+              setIsMinting(false);
+              setMintSuccess();
+
+              // Show success toast with link to token tab
+              toast.success(
+                <div className="flex flex-col gap-2">
+                  <div>POAP tokens minted successfully!</div>
+                  <Link
+                    href={`/poaps/${id}/token`}
+                    className="inline-flex items-center gap-1.5 text-sm font-medium underline"
+                  >
+                    <Coins className="h-4 w-4" />
+                    View token details
+                  </Link>
+                </div>
+              );
+
+              // Only refresh the page after mint is confirmed
+              router.refresh();
+
+              // Call the onSuccess callback if provided
+              if (onSuccess) {
+                onSuccess();
+              }
+            },
+            onTimeout: async () => {
+              // If timeout, attempt a direct mint
+              try {
+                setMintProgress('Timeout waiting for token minting. Attempting direct mint...');
+                const mintResponse = await fetch(`/api/poaps/${id}/mint`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                });
+
+                if (mintResponse.ok) {
+                  const mintData = await mintResponse.json();
+                  if (mintData.success) {
+                    setMintSuccess();
+                    toast.success('POAP tokens minted successfully!');
+
+                    // Refresh page after direct mint succeeds
+                    router.refresh();
+
+                    // Call the onSuccess callback if provided
+                    if (onSuccess) {
+                      onSuccess();
+                    }
+                  } else {
+                    setMintError('Failed to mint tokens: ' + (mintData.error || 'Unknown error'));
+
+                    // Still refresh the page if the distribution was created but minting failed
+                    router.refresh();
+
+                    if (onSuccess) {
+                      onSuccess();
+                    }
+                  }
+                } else {
+                  setMintError('Failed to mint tokens: Server error');
+
+                  // Still refresh the page if the distribution was created but minting failed
+                  router.refresh();
+
+                  if (onSuccess) {
+                    onSuccess();
+                  }
+                }
+              } catch (error) {
+                console.error('Error in direct mint attempt:', error);
+                setMintError(
+                  'Failed to mint tokens: ' +
+                    (error instanceof Error ? error.message : 'Unknown error')
+                );
+
+                // Still refresh the page if the distribution was created but minting failed
+                router.refresh();
+
+                if (onSuccess) {
+                  onSuccess();
+                }
+              } finally {
+                setIsMinting(false);
+              }
+            },
+          });
+        }
       } else {
-        setIsMinting(false);
-      }
+        // Regular token minting flow for non-first distribution methods
+        // Check for token minting status
+        setIsMinting(true);
+        setMintProgress('Checking if tokens need to be minted...');
 
-      // Refresh the current page instead of redirecting
-      router.refresh();
+        // Get initial token status
+        const initialStatus = await checkTokenMinted();
 
-      // Call the onSuccess callback if provided
-      if (onSuccess) {
-        onSuccess();
+        if (!initialStatus.minted) {
+          // If no token exists, show minting progress indicator
+          setMintProgress('Minting POAP tokens...');
+          openMintingModal();
+
+          // Start polling for token minting
+          pollForTokenMintStatus({
+            poapId: id,
+            onMinted: () => {
+              setIsMinting(false);
+              setMintSuccess();
+
+              // Show success toast with link to token tab
+              toast.success(
+                <div className="flex flex-col gap-2">
+                  <div>POAP tokens minted successfully!</div>
+                  <Link
+                    href={`/poaps/${id}/token`}
+                    className="inline-flex items-center gap-1.5 text-sm font-medium underline"
+                  >
+                    <Coins className="h-4 w-4" />
+                    View token details
+                  </Link>
+                </div>
+              );
+
+              // Refresh the page after token is minted successfully
+              router.refresh();
+
+              // Call the onSuccess callback if provided
+              if (onSuccess) {
+                onSuccess();
+              }
+            },
+            onTimeout: () => {
+              setIsMinting(false);
+              setMintError('Timeout waiting for token minting');
+              console.log('Timeout waiting for token minting');
+
+              // Refresh the page even if minting timed out
+              router.refresh();
+
+              if (onSuccess) {
+                onSuccess();
+              }
+            },
+          });
+        } else {
+          setIsMinting(false);
+
+          // Token already exists, refresh the page
+          router.refresh();
+
+          if (onSuccess) {
+            onSuccess();
+          }
+        }
       }
     } catch (error) {
       console.error('Error creating Airdrop distribution:', error);

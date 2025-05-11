@@ -21,32 +21,32 @@ export function getTruncatedImageInfo(imageUrl: string): string {
  */
 export function getSafeImageUrl(url: string): string {
   if (!url) return '';
-  
+
   // Return base64 images as-is
   if (isBase64Image(url)) return url;
-  
+
   try {
     // For URLs with special characters, we need proper encoding
     // Use URL constructor for proper parsing
     const urlObj = new URL(url);
-    
+
     // Handle the search params separately to ensure proper encoding
     const searchParams = new URLSearchParams();
-    
+
     // Get existing search params and re-add them with proper encoding
     for (const [key, value] of urlObj.searchParams.entries()) {
       searchParams.append(key, value);
     }
-    
+
     // Build the final URL with encoded path and search params
     const encodedPath = encodeURI(decodeURI(urlObj.pathname));
     const encodedSearch = searchParams.toString();
-    
+
     // Reconstruct the URL with properly encoded components
     return `${urlObj.protocol}//${urlObj.host}${encodedPath}${encodedSearch ? `?${encodedSearch}` : ''}`;
   } catch (e) {
     // If URL parsing fails, try a simple encoding approach as fallback
-    console.error("Failed to encode image URL:", e);
+    console.error('Failed to encode image URL:', e);
     try {
       // For simple URLs without complex parameters, encode the whole URL
       return encodeURI(decodeURI(url));
@@ -233,17 +233,20 @@ export async function updatePoapStatusBasedOnDistributionMethods(poapId: string)
  */
 export async function mintTokensAfterDistributionCreated(poapId: string): Promise<any> {
   try {
+    console.log(`Checking token status for POAP ${poapId}`);
+
     // Check if tokens are already minted
     const existingToken = await prisma.poapToken.findFirst({
       where: { poapId },
     });
 
     if (existingToken) {
-      console.log(`Tokens already minted for POAP ${poapId}`);
+      console.log(`Tokens already minted for POAP ${poapId}`, existingToken);
       return {
         success: true,
         message: 'Tokens already minted',
         mintAddress: existingToken.mintAddress,
+        tokenId: existingToken.id,
       };
     }
 
@@ -256,29 +259,83 @@ export async function mintTokensAfterDistributionCreated(poapId: string): Promis
       throw new Error(`POAP ${poapId} not found`);
     }
 
-    // Always mint, even with 0 supply
-    console.log(`Minting token for POAP ${poapId}`);
+    // Check if this is the first distribution method
+    const distributionMethodCount = await prisma.distributionMethod.count({
+      where: {
+        poapId,
+        deleted: false,
+      },
+    });
 
-    // Instead of calling the route handler, make a POST request to the API endpoint
-    const response = await post(`/api/poaps/${poapId}/mint`, {}) as { 
-      success: boolean;
-      message?: string;
-      error?: string;
-      mintAddress?: string;
-    };
-    
-    if (!response.success) {
-      throw new Error(response.error || 'Failed to mint tokens');
+    const isFirstDistributionMethod = distributionMethodCount === 1;
+    console.log(
+      `POAP ${poapId} has ${distributionMethodCount} distribution methods. First method: ${isFirstDistributionMethod}`
+    );
+
+    // Always mint token for the first distribution method
+    if (isFirstDistributionMethod) {
+      console.log(`Minting first token for POAP ${poapId}`);
+    } else {
+      console.log(`Minting token for POAP ${poapId} (not first distribution method)`);
     }
 
-    return {
-      success: true,
-      message: 'Tokens minted successfully',
-      mintAddress: response.mintAddress,
-    };
+    // Make a POST request to the API endpoint with a maximum of 3 retries
+    let attempt = 0;
+    const maxAttempts = 3;
+    let lastError = null;
+
+    while (attempt < maxAttempts) {
+      attempt++;
+      try {
+        console.log(`Attempt ${attempt}/${maxAttempts} to mint token for POAP ${poapId}`);
+        // Instead of calling the route handler, make a POST request to the API endpoint
+        const response = (await post(`/api/poaps/${poapId}/mint`, {})) as {
+          success: boolean;
+          message?: string;
+          error?: string;
+          mintAddress?: string;
+        };
+
+        if (!response.success) {
+          lastError = response.error || 'Failed to mint tokens';
+          console.error(`Attempt ${attempt} failed: ${lastError}`);
+
+          // If we still have attempts left, wait a bit before retrying
+          if (attempt < maxAttempts) {
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            continue;
+          }
+
+          throw new Error(lastError);
+        }
+
+        console.log(`Successfully minted token for POAP ${poapId} on attempt ${attempt}`);
+
+        return {
+          success: true,
+          message: 'Tokens minted successfully',
+          mintAddress: response.mintAddress,
+          isFirstDistributionMethod, // Return flag to indicate if this was the first distribution method
+        };
+      } catch (error) {
+        lastError = error instanceof Error ? error.message : 'Unknown error';
+        console.error(`Error on attempt ${attempt}:`, error);
+
+        // If we still have attempts left, wait a bit before retrying
+        if (attempt < maxAttempts) {
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          continue;
+        }
+      }
+    }
+
+    throw new Error(lastError || 'Failed to mint tokens after multiple attempts');
   } catch (error) {
     console.error('Error minting tokens after distribution creation:', error);
-    return null;
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
   }
 }
 
@@ -356,9 +413,9 @@ export async function mintAdditionalTokenSupply(
     }
 
     // Instead of importing from the route, make a POST request to the API endpoint
-    const response = await post(`/api/poaps/${poapId}/mint/additional`, {
-      additionalSupply
-    }) as {
+    const response = (await post(`/api/poaps/${poapId}/mint/additional`, {
+      additionalSupply,
+    })) as {
       success: boolean;
       message?: string;
       error?: string;

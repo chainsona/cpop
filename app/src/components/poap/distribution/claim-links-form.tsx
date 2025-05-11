@@ -10,6 +10,9 @@ import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
 import { Coins, Loader2 } from 'lucide-react';
 import Link from 'next/link';
+import { POAPMintModal } from '@/components/poap/poap-mint-modal';
+import { usePOAPMintModal } from '@/hooks/use-poap-mint-modal';
+import { pollForTokenMintStatus } from '@/lib/mint-tokens-utils';
 
 interface ClaimLinksFormProps {
   id: string;
@@ -25,6 +28,9 @@ export function ClaimLinksForm({ id, onSuccess }: ClaimLinksFormProps) {
   const [isLoadingPoap, setIsLoadingPoap] = React.useState(false);
   const [isMinting, setIsMinting] = React.useState(false);
   const [mintProgress, setMintProgress] = React.useState<string>('');
+  const [poapTitle, setPoapTitle] = React.useState<string>('');
+  const { modalState, openMintingModal, setMintSuccess, setMintError, onOpenChange } =
+    usePOAPMintModal();
 
   // Fetch POAP details to get end date
   React.useEffect(() => {
@@ -43,6 +49,11 @@ export function ClaimLinksForm({ id, onSuccess }: ClaimLinksFormProps) {
         if (data.poap && data.poap.endDate && !expiryDate) {
           setExpiryDate(new Date(data.poap.endDate));
         }
+
+        // Save the POAP title for the mint modal
+        if (data.poap && data.poap.title) {
+          setPoapTitle(data.poap.title);
+        }
       } catch (error) {
         console.error('Error fetching POAP details:', error);
       } finally {
@@ -51,7 +62,7 @@ export function ClaimLinksForm({ id, onSuccess }: ClaimLinksFormProps) {
     };
 
     fetchPoapDetails();
-  }, [id]);
+  }, [id, expiryDate]);
 
   // Function to check if token was minted
   const checkTokenMinted = async (): Promise<{ minted: boolean; mintAddress?: string }> => {
@@ -98,26 +109,21 @@ export function ClaimLinksForm({ id, onSuccess }: ClaimLinksFormProps) {
 
       toast.success('Claim links created successfully');
 
-      // Check for token minting status
-      setIsMinting(true);
-      setMintProgress('Checking if tokens need to be minted...');
+      // Always check if this is the first distribution method
+      const isFirstDistributionMethod =
+        data.isFirstDistributionMethod || data.tokenMint?.shouldShowMintModal;
 
-      // Get initial token status
-      const initialStatus = await checkTokenMinted();
+      // If this is the first distribution method or we should specifically show the mint modal
+      if (isFirstDistributionMethod) {
+        // Show minting modal immediately for first distribution method
+        setIsMinting(true);
+        openMintingModal();
 
-      if (!initialStatus.minted) {
-        // If no token exists, show minting in progress indicator
-        setMintProgress('Minting POAP tokens...');
-
-        // Poll for token creation (every 3 seconds for up to 30 seconds)
-        let attempts = 0;
-        const maxAttempts = 10;
-        const interval = setInterval(async () => {
-          attempts++;
-          const status = await checkTokenMinted();
-
-          if (status.minted) {
-            clearInterval(interval);
+        // Check if token is already minted from server-side
+        if (data.tokenMint?.success) {
+          // Delay to show the minting animation for at least a second
+          setTimeout(() => {
+            setMintSuccess();
             setIsMinting(false);
 
             // Show success toast with link to token tab
@@ -133,22 +139,180 @@ export function ClaimLinksForm({ id, onSuccess }: ClaimLinksFormProps) {
                 </Link>
               </div>
             );
-          } else if (attempts >= maxAttempts) {
-            clearInterval(interval);
-            setIsMinting(false);
-            console.log('Timeout waiting for token minting');
-          }
-        }, 3000);
+
+            // Only refresh the page after mint is confirmed
+            router.refresh();
+
+            // Call the onSuccess callback if provided
+            if (onSuccess) {
+              onSuccess();
+            }
+          }, 1500);
+        } else {
+          // Need to mint token or check status
+          pollForTokenMintStatus({
+            poapId: id,
+            maxAttempts: 15, // Increased attempts
+            intervalMs: 2000, // More frequent checks
+            onProgress: message => {
+              setMintProgress(message);
+            },
+            onMinted: () => {
+              setIsMinting(false);
+              setMintSuccess();
+
+              // Show success toast with link to token tab
+              toast.success(
+                <div className="flex flex-col gap-2">
+                  <div>POAP tokens minted successfully!</div>
+                  <Link
+                    href={`/poaps/${id}/token`}
+                    className="inline-flex items-center gap-1.5 text-sm font-medium underline"
+                  >
+                    <Coins className="h-4 w-4" />
+                    View token details
+                  </Link>
+                </div>
+              );
+
+              // Only refresh the page after mint is confirmed
+              router.refresh();
+
+              // Call the onSuccess callback if provided
+              if (onSuccess) {
+                onSuccess();
+              }
+            },
+            onTimeout: async () => {
+              // If timeout, attempt a direct mint
+              try {
+                setMintProgress('Timeout waiting for token minting. Attempting direct mint...');
+                const mintResponse = await fetch(`/api/poaps/${id}/mint`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  credentials: 'include',
+                });
+
+                if (mintResponse.ok) {
+                  const mintData = await mintResponse.json();
+                  if (mintData.success) {
+                    setMintSuccess();
+                    toast.success('POAP tokens minted successfully!');
+
+                    // Refresh page after direct mint succeeds
+                    router.refresh();
+
+                    // Call the onSuccess callback if provided
+                    if (onSuccess) {
+                      onSuccess();
+                    }
+                  } else {
+                    setMintError('Failed to mint tokens: ' + (mintData.error || 'Unknown error'));
+
+                    // Still refresh the page if the distribution was created but minting failed
+                    router.refresh();
+
+                    if (onSuccess) {
+                      onSuccess();
+                    }
+                  }
+                } else {
+                  setMintError('Failed to mint tokens: Server error');
+
+                  // Still refresh the page if the distribution was created but minting failed
+                  router.refresh();
+
+                  if (onSuccess) {
+                    onSuccess();
+                  }
+                }
+              } catch (error) {
+                console.error('Error in direct mint attempt:', error);
+                setMintError(
+                  'Failed to mint tokens: ' +
+                    (error instanceof Error ? error.message : 'Unknown error')
+                );
+
+                // Still refresh the page if the distribution was created but minting failed
+                router.refresh();
+
+                if (onSuccess) {
+                  onSuccess();
+                }
+              } finally {
+                setIsMinting(false);
+              }
+            },
+          });
+        }
       } else {
-        setIsMinting(false);
-      }
+        // Regular case for non-first distribution methods
+        // Check for token minting status (for non-first methods)
+        setIsMinting(true);
+        setMintProgress('Checking if tokens need to be minted...');
 
-      // Refresh the current page instead of redirecting
-      router.refresh();
+        // Get initial token status
+        const initialStatus = await checkTokenMinted();
 
-      // Call the onSuccess callback if provided
-      if (onSuccess) {
-        onSuccess();
+        if (!initialStatus.minted) {
+          // If no token exists, show minting in progress indicator
+          setMintProgress('Minting POAP tokens...');
+
+          // Poll for token creation (every 3 seconds for up to 30 seconds)
+          let attempts = 0;
+          const maxAttempts = 10;
+          const interval = setInterval(async () => {
+            attempts++;
+            const status = await checkTokenMinted();
+
+            if (status.minted) {
+              clearInterval(interval);
+              setIsMinting(false);
+
+              // Show success toast with link to token tab
+              toast.success(
+                <div className="flex flex-col gap-2">
+                  <div>POAP tokens minted successfully!</div>
+                  <Link
+                    href={`/poaps/${id}/token`}
+                    className="inline-flex items-center gap-1.5 text-sm font-medium underline"
+                  >
+                    <Coins className="h-4 w-4" />
+                    View token details
+                  </Link>
+                </div>
+              );
+
+              // Refresh the page after token is minted
+              router.refresh();
+
+              // Call the onSuccess callback if provided
+              if (onSuccess) {
+                onSuccess();
+              }
+            } else if (attempts >= maxAttempts) {
+              clearInterval(interval);
+              setIsMinting(false);
+              console.log('Timeout waiting for token minting');
+
+              // Refresh the page even if minting timed out
+              router.refresh();
+
+              if (onSuccess) {
+                onSuccess();
+              }
+            }
+          }, 3000);
+        } else {
+          setIsMinting(false);
+
+          // Refresh immediately if token was already minted
+          router.refresh();
+
+          if (onSuccess) {
+            onSuccess();
+          }
+        }
       }
     } catch (error) {
       console.error('Error creating claim links:', error);
@@ -171,7 +335,9 @@ export function ClaimLinksForm({ id, onSuccess }: ClaimLinksFormProps) {
           <p className="text-neutral-600">Each link is unique and can only be used once.</p>
 
           <div className="max-w-xs">
-            <Label htmlFor="amount">Number of links <span className="text-red-500">*</span></Label>
+            <Label htmlFor="amount">
+              Number of links <span className="text-red-500">*</span>
+            </Label>
             <Input
               id="amount"
               type="number"
@@ -252,7 +418,7 @@ export function ClaimLinksForm({ id, onSuccess }: ClaimLinksFormProps) {
             </Button>
           </div>
 
-          {/* Token minting status indicator */}
+          {/* Token minting status indicator (only shown for non-modal minting) */}
           {isMinting && (
             <div className="mt-6 bg-blue-50 p-4 rounded-lg flex items-center gap-3 border border-blue-100 animate-pulse">
               <Loader2 className="h-5 w-5 text-blue-600 animate-spin" />
@@ -264,6 +430,16 @@ export function ClaimLinksForm({ id, onSuccess }: ClaimLinksFormProps) {
           )}
         </div>
       )}
+
+      {/* Add POAP Mint Modal */}
+      <POAPMintModal
+        open={modalState.open}
+        onOpenChange={onOpenChange}
+        status={modalState.status}
+        error={modalState.error}
+        poapId={id}
+        poapTitle={poapTitle}
+      />
     </div>
   );
 }

@@ -6,13 +6,14 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { DatePicker } from '@/components/ui/date-picker';
 import { StepIndicator } from './step-indicator';
-import { MapPin, Search, AlertTriangle, ExternalLink } from 'lucide-react';
+import { Loader2, Coins } from 'lucide-react';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
-import Script from 'next/script';
 import Link from 'next/link';
-import { Alert, AlertDescription, AlertTitle } from '../../../components/ui/alert';
 import { LocationSearchFallback } from './location-search-fallback';
+import { POAPMintModal } from '@/components/poap/poap-mint-modal';
+import { usePOAPMintModal } from '@/hooks/use-poap-mint-modal';
+import { pollForTokenMintStatus } from '@/lib/mint-tokens-utils';
 
 // Use fallback by default until Google Maps API key is properly configured
 const USE_FALLBACK = true;
@@ -43,6 +44,30 @@ export function LocationBasedForm({ id, onSuccess }: LocationBasedFormProps) {
     USE_FALLBACK ? 'Using fallback search by default' : null
   );
   const [searchQuery, setSearchQuery] = React.useState('');
+  const [isMinting, setIsMinting] = React.useState(false);
+  const [mintProgress, setMintProgress] = React.useState<string>('');
+  const [poapTitle, setPoapTitle] = React.useState<string>('');
+  const { modalState, openMintingModal, setMintSuccess, setMintError, onOpenChange } =
+    usePOAPMintModal();
+
+  // Function to check if token was minted
+  const checkTokenMinted = async (): Promise<{ minted: boolean; mintAddress?: string }> => {
+    try {
+      const response = await fetch(`/api/poaps/${id}`);
+      if (!response.ok) {
+        throw new Error('Failed to check token status');
+      }
+
+      const data = await response.json();
+      return {
+        minted: !!data.poap.token,
+        mintAddress: data.poap.token?.mintAddress,
+      };
+    } catch (error) {
+      console.error('Error checking token status:', error);
+      return { minted: false };
+    }
+  };
 
   // Fetch POAP details to get dates
   React.useEffect(() => {
@@ -66,6 +91,11 @@ export function LocationBasedForm({ id, onSuccess }: LocationBasedFormProps) {
           if (data.poap.endDate && !endDate) {
             setEndDate(new Date(data.poap.endDate));
           }
+
+          // Save the POAP title for the mint modal
+          if (data.poap.title) {
+            setPoapTitle(data.poap.title);
+          }
         }
       } catch (error) {
         console.error('Error fetching POAP details:', error);
@@ -75,7 +105,7 @@ export function LocationBasedForm({ id, onSuccess }: LocationBasedFormProps) {
     };
 
     fetchPoapDetails();
-  }, [id]);
+  }, [id, startDate, endDate]);
 
   const handleSubmit = async () => {
     try {
@@ -108,15 +138,157 @@ export function LocationBasedForm({ id, onSuccess }: LocationBasedFormProps) {
       const data = await response.json();
 
       toast.success('Location-based claim created successfully');
-      router.refresh();
 
-      // Call the onSuccess callback if provided
-      if (onSuccess) {
-        onSuccess();
+      // Always check if this is the first distribution method
+      const isFirstDistributionMethod =
+        data.isFirstDistributionMethod || data.tokenMint?.shouldShowMintModal;
+
+      // If this is the first distribution method or we should specifically show the mint modal
+      if (isFirstDistributionMethod) {
+        // Show minting modal immediately for first distribution method
+        setIsMinting(true);
+        openMintingModal();
+
+        // Check if token is already minted from server-side
+        if (data.tokenMint?.success) {
+          // Delay to show the minting animation for at least a second
+          setTimeout(() => {
+            setMintSuccess();
+            setIsMinting(false);
+
+            // Show success toast with link to token tab
+            toast.success(
+              <div className="flex flex-col gap-2">
+                <div>POAP tokens minted successfully!</div>
+                <Link
+                  href={`/poaps/${id}/token`}
+                  className="inline-flex items-center gap-1.5 text-sm font-medium underline"
+                >
+                  <Coins className="h-4 w-4" />
+                  View token details
+                </Link>
+              </div>
+            );
+
+            // Only refresh the page after mint is confirmed
+            router.refresh();
+
+            // Call the onSuccess callback if provided
+            if (onSuccess) {
+              onSuccess();
+            }
+          }, 1500);
+        } else {
+          // Need to mint token or check status
+          pollForTokenMintStatus({
+            poapId: id,
+            maxAttempts: 15, // Increased attempts
+            intervalMs: 2000, // More frequent checks
+            onProgress: message => {
+              setMintProgress(message);
+            },
+            onMinted: () => {
+              setIsMinting(false);
+              setMintSuccess();
+
+              // Show success toast with link to token tab
+              toast.success(
+                <div className="flex flex-col gap-2">
+                  <div>POAP tokens minted successfully!</div>
+                  <Link
+                    href={`/poaps/${id}/token`}
+                    className="inline-flex items-center gap-1.5 text-sm font-medium underline"
+                  >
+                    <Coins className="h-4 w-4" />
+                    View token details
+                  </Link>
+                </div>
+              );
+
+              // Only refresh the page after mint is confirmed
+              router.refresh();
+
+              // Call the onSuccess callback if provided
+              if (onSuccess) {
+                onSuccess();
+              }
+            },
+            onTimeout: async () => {
+              // If timeout, attempt a direct mint
+              try {
+                setMintProgress('Timeout waiting for token minting. Attempting direct mint...');
+                const mintResponse = await fetch(`/api/poaps/${id}/mint`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  credentials: 'include',
+                });
+
+                if (mintResponse.ok) {
+                  const mintData = await mintResponse.json();
+                  if (mintData.success) {
+                    setMintSuccess();
+                    toast.success('POAP tokens minted successfully!');
+
+                    // Refresh page after direct mint succeeds
+                    router.refresh();
+
+                    // Call the onSuccess callback if provided
+                    if (onSuccess) {
+                      onSuccess();
+                    }
+                  } else {
+                    setMintError('Failed to mint tokens: ' + (mintData.error || 'Unknown error'));
+
+                    // Still refresh the page if the distribution was created but minting failed
+                    router.refresh();
+
+                    if (onSuccess) {
+                      onSuccess();
+                    }
+                  }
+                } else {
+                  setMintError('Failed to mint tokens: Server error');
+
+                  // Still refresh the page if the distribution was created but minting failed
+                  router.refresh();
+
+                  if (onSuccess) {
+                    onSuccess();
+                  }
+                }
+              } catch (error) {
+                console.error('Error in direct mint attempt:', error);
+                setMintError(
+                  'Failed to mint tokens: ' +
+                    (error instanceof Error ? error.message : 'Unknown error')
+                );
+
+                // Still refresh the page if the distribution was created but minting failed
+                router.refresh();
+
+                if (onSuccess) {
+                  onSuccess();
+                }
+              } finally {
+                setIsMinting(false);
+              }
+            },
+          });
+        }
+      } else {
+        // For non-first methods, refresh the page immediately
+        setIsMinting(false);
+        router.refresh();
+
+        // Call the onSuccess callback if provided
+        if (onSuccess) {
+          onSuccess();
+        }
       }
     } catch (error) {
       console.error('Error creating location-based claim:', error);
       toast.error(error instanceof Error ? error.message : 'Failed to create location-based claim');
+      setIsMinting(false);
     } finally {
       setIsSubmitting(false);
     }
@@ -260,15 +432,42 @@ export function LocationBasedForm({ id, onSuccess }: LocationBasedFormProps) {
           </div>
 
           <div className="flex gap-3 pt-4">
-            <Button variant="outline" onClick={() => setStep(2)} disabled={isSubmitting}>
+            <Button
+              variant="outline"
+              onClick={() => setStep(2)}
+              disabled={isSubmitting || isMinting}
+            >
               Back
             </Button>
-            <Button onClick={handleSubmit} disabled={isSubmitting}>
+            <Button onClick={handleSubmit} disabled={isSubmitting || isMinting}>
               {isSubmitting ? 'Creating...' : 'Create Location-Based Claim'}
             </Button>
           </div>
+
+          {/* Token minting status indicator */}
+          {isMinting && !modalState.open && (
+            <div className="mt-6 bg-blue-50 p-4 rounded-lg flex items-center gap-3 border border-blue-100 animate-pulse">
+              <Loader2 className="h-5 w-5 text-blue-600 animate-spin" />
+              <div>
+                <p className="text-blue-700 font-medium">
+                  {mintProgress || 'Minting POAP tokens...'}
+                </p>
+                <p className="text-blue-600 text-sm">This may take a few moments...</p>
+              </div>
+            </div>
+          )}
         </div>
       )}
+
+      {/* Add POAP Mint Modal */}
+      <POAPMintModal
+        open={modalState.open}
+        onOpenChange={onOpenChange}
+        status={modalState.status}
+        error={modalState.error}
+        poapId={id}
+        poapTitle={poapTitle}
+      />
     </div>
   );
 }

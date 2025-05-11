@@ -123,6 +123,16 @@ async function postHandler(request: Request, { params }: { params: Promise<Param
       return NextResponse.json({ error: 'Invalid distribution method type' }, { status: 400 });
     }
 
+    // Check if this is the first distribution method being created
+    const existingMethodsCount = await prisma.distributionMethod.count({
+      where: {
+        poapId,
+        deleted: false,
+      },
+    });
+
+    const isFirstDistributionMethod = existingMethodsCount === 0;
+
     // Create a new distribution method
     let distributionMethod = await prisma.distributionMethod.create({
       data: {
@@ -271,17 +281,56 @@ async function postHandler(request: Request, { params }: { params: Promise<Param
       where: { poapId },
     });
 
-    // Always ensure token exists, but don't mint more supply
-    if (!existingToken) {
+    // Track if we should show the mint modal
+    let shouldShowMintModal = false;
+    let mintResult = null;
+
+    // If this is the first distribution method and no token exists, force token minting
+    if (isFirstDistributionMethod || !existingToken) {
       try {
         // Create token record with 0 supply
-        console.log(`No existing token found for POAP ${poapId}. Creating token.`);
-        const mintResult = await mintTokensAfterDistributionCreated(poapId);
+        console.log(
+          `Minting token for POAP ${poapId} as part of first distribution method creation.`
+        );
+        mintResult = await mintTokensAfterDistributionCreated(poapId);
 
         if (mintResult?.success) {
           console.log(`Token created successfully: ${mintResult.mintAddress}`);
+          shouldShowMintModal = isFirstDistributionMethod;
         } else {
           console.error('Failed to create token for POAP');
+
+          // Even if mintTokensAfterDistributionCreated fails, try direct API call as fallback
+          if (isFirstDistributionMethod) {
+            console.log('Attempting direct mint API call as fallback...');
+            try {
+              const directMintResponse = await fetch(
+                `${process.env.NEXT_PUBLIC_API_URL || ''}/api/poaps/${poapId}/mint`,
+                {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({}),
+                }
+              );
+
+              if (directMintResponse.ok) {
+                const directMintResult = await directMintResponse.json();
+                if (directMintResult.success) {
+                  mintResult = {
+                    success: true,
+                    mintAddress: directMintResult.mintAddress,
+                    message: 'Tokens minted successfully via fallback',
+                  };
+                  shouldShowMintModal = true;
+                  console.log('Fallback mint succeeded');
+                }
+              }
+            } catch (fallbackError) {
+              console.error('Fallback mint attempt also failed:', fallbackError);
+            }
+          }
         }
       } catch (error) {
         // Log error but don't block distribution method creation
@@ -295,6 +344,14 @@ async function postHandler(request: Request, { params }: { params: Promise<Param
     return NextResponse.json({
       success: true,
       distributionMethod,
+      tokenMint: mintResult?.success
+        ? {
+            success: true,
+            shouldShowMintModal,
+            mintAddress: mintResult.mintAddress,
+          }
+        : null,
+      isFirstDistributionMethod,
     });
   } catch (error) {
     console.error('Error creating distribution method:', error);

@@ -101,48 +101,87 @@ export async function pollForTokenMintStatus({
   intervalMs = 3000,
   onMinted,
   onTimeout,
+  onProgress,
 }: {
   poapId: string;
   maxAttempts?: number;
   intervalMs?: number;
   onMinted?: () => void;
   onTimeout?: () => void;
+  onProgress?: (message: string) => void;
 }) {
   let attempts = 0;
-  
+
   // Check if token is minted
   const checkTokenMinted = async () => {
     try {
-      const response = await fetch(`/api/poaps/${poapId}/token/status`);
-      if (!response.ok) return { minted: false };
-      
+      const attemptMessage = `Checking token status for POAP ${poapId} (attempt ${attempts + 1}/${maxAttempts})`;
+      console.log(attemptMessage);
+      if (onProgress) {
+        onProgress(attemptMessage);
+      }
+
+      const response = await fetch(`/api/poaps/${poapId}/token/status`, {
+        method: 'GET',
+        headers: {
+          'Cache-Control': 'no-cache',
+          Pragma: 'no-cache',
+        },
+      });
+
+      // Handle specific status codes
+      if (response.status === 404) {
+        console.warn(
+          `Token status endpoint not found for POAP ${poapId}. This might be expected if the endpoint is still being deployed.`
+        );
+        return { minted: false, error: 'endpoint-not-found' };
+      }
+
+      if (!response.ok) {
+        console.error(
+          `Error response from token status check: ${response.status} ${response.statusText}`
+        );
+        return { minted: false, error: 'server-error' };
+      }
+
       const data = await response.json();
-      return { minted: data.minted || false };
+      console.log(`Token status response for POAP ${poapId}:`, data);
+
+      // If we get successful response but no minted status, consider it as not minted
+      if (data && typeof data.minted === 'boolean') {
+        return { minted: data.minted, mintAddress: data.mintAddress };
+      } else {
+        console.warn(`Unexpected token status response format for POAP ${poapId}:`, data);
+        return { minted: false, error: 'invalid-response' };
+      }
     } catch (error) {
       console.error('Error checking token mint status:', error);
-      return { minted: false };
+      return { minted: false, error: 'network-error' };
     }
   };
-  
+
   // Initial check
   const initialStatus = await checkTokenMinted();
   if (initialStatus.minted) {
+    console.log(`Token already minted for POAP ${poapId}`);
     if (onMinted) onMinted();
-    return { minted: true };
+    return { minted: true, mintAddress: initialStatus.mintAddress };
   }
-  
-  // Start polling
-  return new Promise<{ minted: boolean }>((resolve) => {
+
+  // Set up polling
+  return new Promise<{ minted: boolean; mintAddress?: string }>(resolve => {
     const interval = setInterval(async () => {
       attempts++;
       const status = await checkTokenMinted();
-      
+
       if (status.minted) {
         clearInterval(interval);
+        console.log(`Token minted for POAP ${poapId} after ${attempts} attempts`);
         if (onMinted) onMinted();
-        resolve({ minted: true });
+        resolve({ minted: true, mintAddress: status.mintAddress });
       } else if (attempts >= maxAttempts) {
         clearInterval(interval);
+        console.log(`Max attempts (${maxAttempts}) reached for POAP ${poapId}. Token not minted.`);
         if (onTimeout) onTimeout();
         resolve({ minted: false });
       }
