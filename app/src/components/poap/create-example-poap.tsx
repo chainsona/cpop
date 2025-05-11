@@ -54,11 +54,11 @@ const EVENT_DESCRIPTIONS = [
 
 // Solana-themed placeholder images
 const PLACEHOLDER_IMAGES = [
-  'https://placehold.co/600x400/5f57ff/ffffff?text=Solana+Event',
-  'https://placehold.co/600x400/03e1ff/000000?text=SOL+Conference',
-  'https://placehold.co/600x400/000000/00ffbd?text=Solana+Ecosystem',
-  'https://placehold.co/600x400/14f195/000000?text=Breakpoint',
-  'https://placehold.co/600x400/dc1fff/ffffff?text=Solana+Hackathon',
+  'https://placehold.co/600x400/5f57ff/ffffff/png?text=Solana+Event',
+  'https://placehold.co/600x400/03e1ff/000000/png?text=SOL+Conference',
+  'https://placehold.co/600x400/000000/00ffbd/png?text=Solana+Ecosystem',
+  'https://placehold.co/600x400/14f195/000000/png?text=Breakpoint',
+  'https://placehold.co/600x400/dc1fff/ffffff/png?text=Solana+Hackathon',
 ];
 
 // Potential website URLs for events

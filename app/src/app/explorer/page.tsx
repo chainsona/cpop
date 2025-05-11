@@ -7,45 +7,42 @@ import { POAPCard } from '@/components/poap/poap-card';
 import { PoapItem } from '@/types/poap';
 import { useWalletContext } from '@/contexts/wallet-context';
 import { ConnectWallet } from '@/components/wallet/connect-wallet';
-import { usePageTitle } from '@/contexts/page-title-context';
+import { Container } from '@/components/ui/container';
+import { PageHeader } from '@/components/ui/page-header';
 
 export default function ExplorerPage() {
   const [poaps, setPoaps] = useState<PoapItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { isConnected, isAuthenticated } = useWalletContext();
-  const { setPageTitle } = usePageTitle();
 
   useEffect(() => {
-    // Set page title to Explorer
-    setPageTitle('Explorer');
-    
     async function fetchPoaps() {
       try {
         setIsLoading(true);
-        
+
         // Use the correct port based on the development server
         const port = process.env.NODE_ENV === 'development' ? window.location.port : '';
         const baseUrl = `${window.location.protocol}//${window.location.hostname}${port ? ':' + port : ''}`;
-        
+
         console.log(`Fetching POAPs from: ${baseUrl}/api/poaps`);
-        
+
         const response = await fetch(`${baseUrl}/api/poaps`, {
           cache: 'no-store',
           headers: {
             'Content-Type': 'application/json',
           },
         });
-        
+
         if (!response.ok) {
           const errorData = await response.json().catch(() => null);
           console.error('Failed to fetch POAPs:', response.status, errorData);
           throw new Error(`Failed to fetch POAPs: ${response.status}`);
         }
-        
+
         const data = await response.json();
         console.log('Received data:', data);
-        
+
         setPoaps(data.poaps || []);
       } catch (err) {
         console.error('Error fetching POAPs:', err);
@@ -56,24 +53,20 @@ export default function ExplorerPage() {
     }
 
     fetchPoaps();
-    
-    // Clean up function to reset the page title when leaving the page
-    return () => {
-      setPageTitle('');
-    };
-  }, [setPageTitle]);
+  }, []);
 
   return (
-    <div className="container mx-auto py-10">
-      <div className="max-w-4xl mx-auto">
-        <div className="flex items-center gap-2 mb-6">
-          <Sparkles className="h-6 w-6 text-pink-600" />
-          <h1 className="text-3xl font-bold">Explorer</h1>
-        </div>
-
-        <p className="text-neutral-600 mb-8">
-          Explore interesting POAPs from the community.
-        </p>
+    <Container>
+      <div className="py-10">
+        <PageHeader
+          title="Explorer"
+          subtitle={
+            <div className="flex items-center">
+              <Sparkles className="h-5 w-5 mr-2 text-pink-600" />
+              <span>Interesting POAPs from the community</span>
+            </div>
+          }
+        />
 
         {/* Loading state */}
         {isLoading && (
@@ -104,6 +97,6 @@ export default function ExplorerPage() {
           </div>
         )}
       </div>
-    </div>
+    </Container>
   );
-} 
+}

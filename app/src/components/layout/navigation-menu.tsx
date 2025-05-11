@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { PlusCircle, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -84,10 +83,10 @@ export function NavigationMenu({
   return (
     <Dialog open={!!externalIsOpen} onOpenChange={open => !open && externalOnClose?.()}>
       <DialogContent
-        className="sm:max-w-5xl lg:max-w-6xl xl:max-w-7xl max-h-[92vh] overflow-y-auto p-6"
+        className="h-[100dvh] flex flex-col sm:max-w-2xl lg:max-w-4xl xl:max-w-6xl sm:max-h-[90vh] overflow-hidden p-0"
         onKeyDown={handleKeyDown}
       >
-        <DialogHeader className="space-y-3 mb-4">
+        <DialogHeader className="space-y-3 mb-4 p-6 pb-0">
           <div className="flex justify-between items-center">
             <DialogTitle className="text-2xl font-bold">
               {currentPoapTitle || 'Navigation'}
@@ -99,7 +98,7 @@ export function NavigationMenu({
         </DialogHeader>
 
         {/* Desktop-optimized layout */}
-        <div className="flex flex-col space-y-6 md:space-y-0 md:flex-row md:gap-6">
+        <div className="flex flex-col space-y-6 md:space-y-0 md:flex-row md:gap-6 overflow-y-auto flex-1 p-6 pt-0">
           {/* Left sidebar - Navigation for desktop */}
           <div className="md:w-60 lg:w-72 space-y-4 order-2 md:order-1">
             {/* User profile card */}

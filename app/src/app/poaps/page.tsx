@@ -8,11 +8,12 @@ import { POAPCard } from '@/components/poap/poap-card';
 import { EmptyState } from '@/components/poap/empty-state';
 import { PoapItem } from '@/types/poap';
 import { fetchWithAuth } from '@/lib/api-client';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Plus, Award } from 'lucide-react';
 import { useWalletContext } from '@/contexts/wallet-context';
 import { ConnectWallet } from '@/components/wallet/connect-wallet';
 import { CreateExamplePOAP } from '@/components/poap/create-example-poap';
-import { usePageTitle } from '@/contexts/page-title-context';
+import { Container } from '@/components/ui/container';
+import { PageHeader } from '@/components/ui/page-header';
 
 // Rate limiting - Track failed auth attempts
 const AUTH_FAILURE_COOLDOWN = 10000; // 10 seconds cooldown after auth failure
@@ -26,20 +27,10 @@ export default function POAPListPage() {
   const { isConnected, walletAddress, connect } = useWalletContext();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [authInCooldown, setAuthInCooldown] = useState(false);
-  const { setPageTitle } = usePageTitle();
 
   // Use refs to track current state without triggering re-renders
   const isAuthenticatedRef = useRef(isAuthenticated);
   const isConnectedRef = useRef(isConnected);
-
-  // Set page title
-  useEffect(() => {
-    setPageTitle('My POAPs');
-    
-    return () => {
-      setPageTitle('');
-    };
-  }, [setPageTitle]);
 
   // Update refs when state changes
   useEffect(() => {
@@ -198,84 +189,100 @@ export default function POAPListPage() {
   // Loading state
   if (isLoading && isConnected && isAuthenticated) {
     return (
-      <div className="container mx-auto py-10 flex flex-col items-center justify-center min-h-[50vh]">
-        <Loader2 className="h-8 w-8 animate-spin text-neutral-300 mb-4" />
-        <p className="text-neutral-500">Loading your POAPs...</p>
-      </div>
+      <Container>
+        <div className="py-10 flex flex-col items-center justify-center min-h-[50vh]">
+          <Loader2 className="h-8 w-8 animate-spin text-neutral-300 mb-4" />
+          <p className="text-neutral-500">Loading your POAPs...</p>
+        </div>
+      </Container>
     );
   }
 
   // Main content
   return (
-    <div className="container mx-auto py-10">
-      <div className="flex justify-between items-center mb-8">
-        <h1 className="text-3xl font-bold">My POAPs</h1>
-        <div className="flex gap-2">
-          <CreateExamplePOAP />
-          <Link href="/poaps/create">
-            <Button>Create POAP</Button>
-          </Link>
-        </div>
-      </div>
-
-      {/* Display error message if any */}
-      {error && (
-        <div className="bg-red-50 border border-red-200 p-4 rounded-md mb-6 text-red-700 flex flex-col">
-          <p>{error}</p>
-          <Button
-            variant="outline"
-            size="sm"
-            className="self-start mt-2"
-            onClick={handleRetry}
-            disabled={authInCooldown}
-          >
-            {authInCooldown ? 'Cooling down...' : 'Retry'}
-          </Button>
-        </div>
-      )}
-
-      {/* Display cooldown message */}
-      {authInCooldown && (
-        <div className="bg-yellow-50 border border-yellow-200 p-4 rounded-md mb-6 text-yellow-700">
-          <p>Too many authentication failures. Waiting before trying again.</p>
-        </div>
-      )}
-
-      {/* Show authentication prompt */}
-      {isConnected && !isAuthenticated && !authInCooldown && (
-        <EmptyState
-          message="You need to authenticate with your wallet to view and manage your POAPs."
-          buttonText="Authenticate Wallet"
-          showButton={true}
-          icon={<Loader2 className="h-8 w-8 text-neutral-400" />}
-        />
-      )}
-
-      {/* Show connect wallet prompt */}
-      {!isConnected && (
-        <EmptyState
-          message="You need to connect your Solana wallet to view and manage your POAPs."
-          buttonText="Connect Wallet"
-          showButton={true}
-          buttonAction={connect}
-          buttonUrl=""
-        />
-      )}
-
-      {/* Show empty state when no POAPs are found but user is authenticated */}
-      {isConnected && isAuthenticated && !isLoading && poaps.length === 0 ? (
-        <EmptyState message="You haven't created any POAPs yet" />
-      ) : (
-        isConnected &&
-        isAuthenticated &&
-        !isLoading && (
-          <div className="space-y-6">
-            {poaps.map(poap => (
-              <POAPCard key={poap.id} poap={poap} />
-            ))}
+    <Container>
+      <div className="py-10">
+        <PageHeader
+          title="My POAPs"
+          subtitle={
+            <div className="flex items-center">
+              <Award className="h-5 w-5 mr-2 text-blue-600" />
+              <span>Manage your Proof of Attendance Protocol tokens</span>
+            </div>
+          }
+          actions={[
+            {
+              href: '/poaps/create',
+              label: 'Create POAP',
+              icon: <Plus className="h-4 w-4 mr-1" />,
+              variant: 'default',
+            },
+          ]}
+        >
+          <div className="mt-2">
+            <CreateExamplePOAP />
           </div>
-        )
-      )}
-    </div>
+        </PageHeader>
+
+        {/* Display error message if any */}
+        {error && (
+          <div className="bg-red-50 border border-red-200 p-4 rounded-md mb-6 text-red-700 flex flex-col">
+            <p>{error}</p>
+            <Button
+              variant="outline"
+              size="sm"
+              className="self-start mt-2"
+              onClick={handleRetry}
+              disabled={authInCooldown}
+            >
+              {authInCooldown ? 'Cooling down...' : 'Retry'}
+            </Button>
+          </div>
+        )}
+
+        {/* Display cooldown message */}
+        {authInCooldown && (
+          <div className="bg-yellow-50 border border-yellow-200 p-4 rounded-md mb-6 text-yellow-700">
+            <p>Too many authentication failures. Waiting before trying again.</p>
+          </div>
+        )}
+
+        {/* Show authentication prompt */}
+        {isConnected && !isAuthenticated && !authInCooldown && (
+          <EmptyState
+            message="You need to authenticate with your wallet to view and manage your POAPs."
+            buttonText="Authenticate Wallet"
+            showButton={true}
+            icon={<Loader2 className="h-8 w-8 text-neutral-400" />}
+          />
+        )}
+
+        {/* Show connect wallet prompt */}
+        {!isConnected && (
+          <EmptyState
+            message="You need to connect your Solana wallet to view and manage your POAPs."
+            buttonText="Connect Wallet"
+            showButton={true}
+            buttonAction={connect}
+            buttonUrl=""
+          />
+        )}
+
+        {/* Show empty state when no POAPs are found but user is authenticated */}
+        {isConnected && isAuthenticated && !isLoading && poaps.length === 0 ? (
+          <EmptyState message="You haven't created any POAPs yet" />
+        ) : (
+          isConnected &&
+          isAuthenticated &&
+          !isLoading && (
+            <div className="space-y-6">
+              {poaps.map(poap => (
+                <POAPCard key={poap.id} poap={poap} />
+              ))}
+            </div>
+          )
+        )}
+      </div>
+    </Container>
   );
 }

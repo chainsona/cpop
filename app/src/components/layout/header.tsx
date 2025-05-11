@@ -32,8 +32,6 @@ import { WalletConnectButton } from '@/components/wallet/wallet-connect-button';
 import { useWalletContext } from '@/contexts/wallet-context';
 import { toast } from 'sonner';
 import { useNavigation } from './navigation-context';
-import { cn } from '@/lib/utils';
-import { Badge } from '@/components/ui/badge';
 
 // User storage key
 const USER_STORAGE_KEY = 'userProfile';
@@ -87,7 +85,12 @@ export function Header() {
   }, [pathname]);
 
   // Determine what title to display
-  const displayTitle = currentPoapTitle || pageTitle || 'Home';
+  const displayTitle = currentPoapTitle || pageTitle || 'Proof of Participation';
+
+  // Function to truncate title on mobile
+  const getTruncatedTitle = (title: string) => {
+    return title.length > 15 ? `${title.substring(0, 15)}...` : title;
+  };
 
   // Load user data from localStorage
   useEffect(() => {
@@ -174,14 +177,14 @@ export function Header() {
             : 'bg-white border-neutral-100'
         } transition-all duration-200`}
       >
-        <div className="container mx-auto flex h-16 items-center justify-between">
+        <div className="container max-w-[1440px] mx-auto flex h-16 items-center justify-between px-4">
           {/* Left side: Menu + Logo + Separator + Page Title */}
           <div className="flex items-center">
             {/* Menu Button - For opening navigation */}
             <Button
               variant="ghost"
               size="icon"
-              className="mr-2"
+              className="mr-1 md:mr-2"
               onClick={openNavigation}
               aria-label="Open navigation menu"
             >
@@ -195,12 +198,19 @@ export function Header() {
             </Link>
 
             {/* Separator */}
-            <div className="mx-3 h-6 w-px bg-neutral-200"></div>
+            <div className="mx-2 md:mx-3 h-6 w-px bg-neutral-200"></div>
 
             {/* Page title with click to open navigation */}
-            <Button variant="ghost" className="px-1 h-9 font-medium" onClick={openNavigation}>
-              <span className="mr-1">{displayTitle}</span>
-              <ChevronDown className="h-4 w-4 text-neutral-500" />
+            <Button
+              variant="ghost"
+              className="px-1 h-9 font-medium max-w-[150px] sm:max-w-none overflow-hidden"
+              onClick={openNavigation}
+            >
+              <span className="mr-1 truncate">
+                <span className="hidden sm:inline">{displayTitle}</span>
+                <span className="inline sm:hidden">{getTruncatedTitle(displayTitle)}</span>
+              </span>
+              <ChevronDown className="h-4 w-4 text-neutral-500 flex-shrink-0" />
             </Button>
           </div>
 

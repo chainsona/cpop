@@ -9,7 +9,8 @@ import { ConnectWallet } from '@/components/wallet/connect-wallet';
 import { Wallet, ArrowLeft } from 'lucide-react';
 import { POAPTokenProps } from '@/components/wallet/poap-token-card';
 import { POAPTokenGrid } from '@/components/wallet/poap-token-grid';
-import { usePageTitle } from '@/contexts/page-title-context';
+import { Container } from '@/components/ui/container';
+import { PageHeader } from '@/components/ui/page-header';
 
 export default function WalletPage() {
   const [tokens, setTokens] = useState<POAPTokenProps[]>([]);
@@ -17,16 +18,6 @@ export default function WalletPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { isConnected, isAuthenticated, walletAddress } = useWalletContext();
-  const { setPageTitle } = usePageTitle();
-
-  // Set page title
-  useEffect(() => {
-    setPageTitle('Wallet');
-    
-    return () => {
-      setPageTitle('');
-    };
-  }, [setPageTitle]);
 
   // Load claimed POAPs and blockchain tokens when the wallet is authenticated
   const fetchData = async () => {
@@ -95,9 +86,7 @@ export default function WalletPage() {
 
           // If we have no tokens, show a more helpful message
           if (formattedTokens.length === 0 && formattedClaims.length === 0) {
-            setError(
-              'No POAP tokens found in your wallet. Only compressed Token2022 POAP tokens are displayed.'
-            );
+            setError('Only compressed Token2022 POAP tokens are displayed.');
           }
         } else {
           const errorData = await tokensResponse.json();
@@ -134,59 +123,55 @@ export default function WalletPage() {
 
   if (!isConnected) {
     return (
-      <div className="container mx-auto py-12">
-        <div className="max-w-md mx-auto">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-center">Connect Your Wallet</CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-col items-center">
-              <Wallet className="h-16 w-16 text-blue-500 mb-4" />
-              <p className="text-center mb-6 text-neutral-600">
-                Connect your wallet to view your claimed POAPs
-              </p>
-              <ConnectWallet
-                variant="default"
-                size="lg"
-                onAuthChange={handleAuthChange}
-                showAddress={true}
-              />
-            </CardContent>
-          </Card>
+      <Container>
+        <div className="py-12">
+          <div className="max-w-md mx-auto">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-center">Connect Your Wallet</CardTitle>
+              </CardHeader>
+              <CardContent className="flex flex-col items-center">
+                <Wallet className="h-16 w-16 text-blue-500 mb-4" />
+                <p className="text-center mb-6 text-neutral-600">
+                  Connect your wallet to view your claimed POAPs
+                </p>
+                <ConnectWallet
+                  variant="default"
+                  size="lg"
+                  onAuthChange={handleAuthChange}
+                  showAddress={true}
+                />
+              </CardContent>
+            </Card>
+          </div>
         </div>
-      </div>
+      </Container>
     );
   }
 
   return (
-    <div className="container mx-auto py-8">
-      <div className="mb-6">
-        <Link href="/">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="gap-1 text-neutral-600 hover:text-neutral-900"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Back to Home
-          </Button>
-        </Link>
-      </div>
+    <Container>
+      <div className="py-8">
+        <PageHeader
+          title="Wallet"
+          subtitle={
+            <div className="flex items-center">
+              <Wallet className="h-5 w-5 mr-2 text-blue-500" />
+              <span>View and manage your POAP tokens</span>
+            </div>
+          }
+          backLink="/"
+          backLabel="Back to Home"
+        />
 
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
-        <div>
-          <h1 className="text-2xl font-bold">Wallet</h1>
-          <p className="text-neutral-600 mt-1">Showing your POAP tokens</p>
-        </div>
+        <POAPTokenGrid
+          tokens={tokens}
+          claimedTokens={claims}
+          loading={loading}
+          error={error}
+          onRetry={handleRetry}
+        />
       </div>
-
-      <POAPTokenGrid
-        tokens={tokens}
-        claimedTokens={claims}
-        loading={loading}
-        error={error}
-        onRetry={handleRetry}
-      />
-    </div>
+    </Container>
   );
 }

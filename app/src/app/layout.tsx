@@ -17,10 +17,13 @@ const geistMono = Geist_Mono({
   subsets: ['latin'],
 });
 
+// App name constant to ensure consistency
+const APP_NAME = 'POAP';
+
 export const metadata: Metadata = {
   title: {
-    default: 'POAP',
-    template: '%s | POAP',
+    default: APP_NAME,
+    template: `%s | ${APP_NAME}`,
   },
   description: 'Manage Proof of Attendance Protocol tokens for your events',
 };

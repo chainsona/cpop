@@ -4,7 +4,6 @@ import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Pencil, FilePenLine, BookOpen, Award, AlertTriangle } from 'lucide-react';
-import { cn } from '@/lib/utils';
 import { POAPTabNav } from '@/components/poap/poap-tab-nav';
 import { useEffect, useState, useMemo } from 'react';
 import { usePageTitle } from '@/contexts/page-title-context';
@@ -439,9 +438,12 @@ export default function POAPDetailPage() {
 
       {/* Main content area */}
       <div className="max-w-6xl mx-auto">
-        <div className="grid md:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8">
           {/* Left column with POAP image and info */}
           <div className="md:col-span-1">
+            {/* POAP title displayed on mobile only */}
+            <h1 className="text-2xl font-bold mb-4 md:hidden">{poap.title}</h1>
+
             <POAPImageDisplay
               id={poap.id}
               imageUrl={poap.imageUrl}
@@ -464,8 +466,8 @@ export default function POAPDetailPage() {
 
           {/* Right column with main content */}
           <div className="md:col-span-2">
-            {/* POAP title and actions */}
-            <div className="mb-6 flex flex-wrap justify-between items-start gap-4">
+            {/* POAP title and actions - hidden on mobile, shown on desktop */}
+            <div className="mb-6 hidden md:flex flex-wrap justify-between items-start gap-4">
               <h1 className="text-2xl sm:text-3xl font-bold">{poap.title}</h1>
 
               {/* Edit button - only for authenticated users who are creators */}
@@ -478,6 +480,18 @@ export default function POAPDetailPage() {
                 </Link>
               )}
             </div>
+
+            {/* Edit button for mobile - only for authenticated users who are creators */}
+            {isAuthenticated && isOwner && (
+              <div className="mb-4 flex md:hidden justify-end">
+                <Link href={`/poaps/${poap.id}/edit`}>
+                  <Button variant="outline" size="sm" className="gap-1.5">
+                    <Pencil className="h-4 w-4" />
+                    Edit POAP
+                  </Button>
+                </Link>
+              </div>
+            )}
 
             {/* Token warning for POAPs without tokens - only for authenticated creators */}
             {isAuthenticated && isOwner && (!poap.token || !poap.token.mintAddress) && (
