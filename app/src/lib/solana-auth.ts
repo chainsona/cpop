@@ -7,6 +7,7 @@ import { prisma } from './db';
 import { authOptions } from './auth';
 import nacl from 'tweetnacl';
 
+// Define the structure for JSON-formatted messages
 export interface SignatureMessage {
   domain: string;
   address: string;
@@ -20,9 +21,11 @@ export interface SignatureMessage {
   chainId?: string;
 }
 
+// Format of the auth token
 export interface SolanaSignInMessage {
-  message: SignatureMessage;
+  message: SignatureMessage | string;
   signature: string;
+  messageFormat: 'json' | 'text';
 }
 
 // Add cache to prevent repeated verification of the same invalid tokens
@@ -80,8 +83,8 @@ function validateTokenStructure(token: string): boolean {
     }
 
     // Check required fields
-    if (!tokenData.message || typeof tokenData.message !== 'object') {
-      console.log('Token validation failed: missing message object');
+    if (!tokenData.message || (typeof tokenData.message !== 'object' && typeof tokenData.message !== 'string')) {
+      console.log('Token validation failed: missing message object or string');
       TOKEN_VALIDATION_CACHE.set(token, { isValid: false, timestamp: Date.now() });
       return false;
     }
@@ -92,26 +95,51 @@ function validateTokenStructure(token: string): boolean {
       return false;
     }
 
-    // Check message structure
-    const msg = tokenData.message;
-    if (!msg.address || !msg.statement || !msg.nonce || !msg.issuedAt || !msg.expirationTime) {
-      console.log('Token validation failed: incomplete message structure');
-      TOKEN_VALIDATION_CACHE.set(token, { isValid: false, timestamp: Date.now() });
-      return false;
-    }
-
-    // Validate expiration time
-    try {
-      const expTime = new Date(msg.expirationTime);
-      if (expTime < new Date()) {
-        console.log('Token validation failed: token expired');
+    // Check message structure based on format
+    if (typeof tokenData.message === 'string') {
+      // For human-readable format, validate through parsing
+      const parsedMsg = parseHumanReadableMessage(tokenData.message);
+      if (!parsedMsg) {
+        console.log('Token validation failed: invalid human-readable message format');
         TOKEN_VALIDATION_CACHE.set(token, { isValid: false, timestamp: Date.now() });
         return false;
       }
-    } catch (e) {
-      console.log('Token validation failed: invalid expiration format');
-      TOKEN_VALIDATION_CACHE.set(token, { isValid: false, timestamp: Date.now() });
-      return false;
+      
+      // Validate expiration time
+      try {
+        const expTime = new Date(parsedMsg.expirationTime);
+        if (expTime < new Date()) {
+          console.log('Token validation failed: token expired');
+          TOKEN_VALIDATION_CACHE.set(token, { isValid: false, timestamp: Date.now() });
+          return false;
+        }
+      } catch (e) {
+        console.log('Token validation failed: invalid expiration format');
+        TOKEN_VALIDATION_CACHE.set(token, { isValid: false, timestamp: Date.now() });
+        return false;
+      }
+    } else {
+      // For JSON format, validate structure directly
+      const msg = tokenData.message;
+      if (!msg.address || !msg.statement || !msg.nonce || !msg.issuedAt || !msg.expirationTime) {
+        console.log('Token validation failed: incomplete message structure');
+        TOKEN_VALIDATION_CACHE.set(token, { isValid: false, timestamp: Date.now() });
+        return false;
+      }
+
+      // Validate expiration time
+      try {
+        const expTime = new Date(msg.expirationTime);
+        if (expTime < new Date()) {
+          console.log('Token validation failed: token expired');
+          TOKEN_VALIDATION_CACHE.set(token, { isValid: false, timestamp: Date.now() });
+          return false;
+        }
+      } catch (e) {
+        console.log('Token validation failed: invalid expiration format');
+        TOKEN_VALIDATION_CACHE.set(token, { isValid: false, timestamp: Date.now() });
+        return false;
+      }
     }
 
     // All validation passed
@@ -125,28 +153,21 @@ function validateTokenStructure(token: string): boolean {
 }
 
 /**
- * Create a signature message for the user to sign
+ * Create a human-readable signature message for the user to sign
  */
-export function createSignatureMessage(walletAddress: string): SignatureMessage {
+export function createSignatureMessage(walletAddress: string): string {
   const domain = typeof window !== 'undefined' ? window.location.host : '';
-  const statement = 'Sign in to POAP with your Solana wallet';
-
-  // Create a random nonce for this login request
-  const nonce = generateNonce();
   const now = new Date();
-  // Change from 30 minutes to 7 days (7 * 24 * 60 * 60 * 1000)
   const sevenDaysLater = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+  const nonce = generateNonce().substring(0, 8); // Shorter nonce for readability
 
-  // Create the signature message
-  return {
-    domain,
-    address: walletAddress,
-    statement,
-    nonce,
-    issuedAt: now.toISOString(),
-    expirationTime: sevenDaysLater.toISOString(),
-    notBefore: now.toISOString(),
-  };
+  // Format using a different approach that displays better in wallets
+  // Some wallets don't render \n properly, so we use actual line breaks
+  return `Sign in to ${domain}
+Wallet: ${walletAddress}
+Nonce: ${nonce}
+Issued: ${now.toISOString().substring(0, 19)}
+Expires: ${sevenDaysLater.toISOString().substring(0, 19)}`;
 }
 
 /**
@@ -169,34 +190,127 @@ function generateNonce(): string {
 }
 
 /**
+ * Parse a human-readable message into components
+ */
+function parseHumanReadableMessage(message: string): SignatureMessage | null {
+  try {
+    const lines = message.split('\n');
+    if (lines.length < 5) return null;
+    
+    // Extract domain from the first line
+    const domainMatch = lines[0].match(/Sign in to (.+)/);
+    if (!domainMatch) return null;
+    
+    // Extract wallet address
+    const addressMatch = lines[1].match(/Wallet: (.+)/);
+    if (!addressMatch) return null;
+    
+    // Extract nonce
+    const nonceMatch = lines[2].match(/Nonce: (.+)/);
+    if (!nonceMatch) return null;
+    
+    // Extract issuedAt
+    const issuedMatch = lines[3].match(/Issued: (.+)/);
+    if (!issuedMatch) return null;
+    
+    // Extract expirationTime
+    const expiresMatch = lines[4].match(/Expires: (.+)/);
+    if (!expiresMatch) return null;
+    
+    return {
+      domain: domainMatch[1],
+      address: addressMatch[1],
+      statement: 'Auth',
+      nonce: nonceMatch[1],
+      issuedAt: issuedMatch[1] + 'Z',
+      expirationTime: expiresMatch[1] + 'Z',
+      notBefore: issuedMatch[1] + 'Z',
+    };
+  } catch (error) {
+    console.error('Error parsing human-readable message:', error);
+    return null;
+  }
+}
+
+/**
+ * Extract wallet address from a message (either format)
+ */
+function getWalletAddressFromMessage(message: string | SignatureMessage): string | null {
+  if (typeof message === 'string') {
+    const parsed = parseHumanReadableMessage(message);
+    return parsed ? parsed.address : null;
+  } else {
+    return message.address;
+  }
+}
+
+/**
  * Verify a signature against a message
  */
 export async function verifySignature(
-  message: SignatureMessage,
+  message: SignatureMessage | string,
   signature: string,
   walletAddress: string
 ): Promise<boolean> {
   try {
     console.log('Verifying signature for wallet:', walletAddress);
-    console.log('Signature received in verifySignature:', {
-      signatureType: typeof signature,
-      signatureLength: signature.length,
-      signaturePrefix: signature.substring(0, 10),
-    });
-
+    
+    // Prepare the message for verification
+    let encodedMessage: Uint8Array;
+    let messageWalletAddress: string | null;
+    
+    if (typeof message === 'string') {
+      // Handle human-readable message format
+      const parsedMessage = parseHumanReadableMessage(message);
+      if (!parsedMessage) {
+        console.error('Failed to parse human-readable message');
+        return false;
+      }
+      messageWalletAddress = parsedMessage.address;
+      encodedMessage = new TextEncoder().encode(message);
+      
+      // Validate expiration
+      try {
+        const expTime = new Date(parsedMessage.expirationTime);
+        if (expTime < new Date()) {
+          console.error('Token expired');
+          return false;
+        }
+      } catch (e) {
+        console.error('Invalid expiration format');
+        return false;
+      }
+    } else {
+      // Handle JSON message format (legacy)
+      messageWalletAddress = message.address;
+      encodedMessage = new TextEncoder().encode(JSON.stringify(message));
+      
+      // Validate expiration
+      try {
+        const expTime = new Date(message.expirationTime);
+        if (expTime < new Date()) {
+          console.error('Token expired');
+          return false;
+        }
+      } catch (e) {
+        console.error('Invalid expiration format');
+        return false;
+      }
+    }
+    
     // Verify that the message was signed by the wallet
     const publicKey = new PublicKey(walletAddress);
-    const encodedMessage = new TextEncoder().encode(JSON.stringify(message));
+    
+    // Validate the message content
+    if (messageWalletAddress !== walletAddress) {
+      console.error('Address in message does not match provided wallet address');
+      return false;
+    }
 
     // Try to decode the signature from base64 (how it's stored from the UI)
     try {
       // Decode from base64 (matching our UI encoding)
       const signatureUint8 = new Uint8Array(Buffer.from(signature, 'base64'));
-
-      console.log('Decoded signature from base64:', {
-        length: signatureUint8.length,
-        prefix: Buffer.from(signatureUint8.slice(0, 5)).toString('hex'),
-      });
 
       // Verify the signature
       const verified = await verifyMessageSignature(publicKey, encodedMessage, signatureUint8);
@@ -337,7 +451,7 @@ export async function solanaAuthMiddleware(
 
         if (token && validateTokenStructure(token)) {
           const signInMessage = JSON.parse(Buffer.from(token, 'base64').toString());
-          const walletAddress = signInMessage.message.address;
+          const walletAddress = getWalletAddressFromMessage(signInMessage.message);
 
           // If the wallet address is different from the one in the session,
           // it could be a security issue - invalidate the current session
@@ -440,19 +554,27 @@ export async function solanaAuthMiddleware(
       );
     }
 
+    // Get wallet address from the message
+    const walletAddress = getWalletAddressFromMessage(signInMessage.message);
+    if (!walletAddress) {
+      return NextResponse.json(
+        { error: 'Unauthorized: Missing wallet address in token' },
+        { status: 401 }
+      );
+    }
+
     // Verify the signature
     const isValid = await verifySignature(
       signInMessage.message,
       signInMessage.signature,
-      signInMessage.message.address
+      walletAddress
     );
 
     if (!isValid) {
       console.log('Auth middleware: Invalid signature');
       // Log the full signature data to help debug
       console.log('Auth middleware: Failed signature data:', {
-        address: signInMessage.message.address,
-        nonce: signInMessage.message.nonce,
+        address: walletAddress,
         signatureLength: signInMessage.signature.length,
         signaturePrefix: signInMessage.signature.substring(0, 10),
       });
@@ -461,21 +583,26 @@ export async function solanaAuthMiddleware(
 
     // Success case: log the successful authentication details
     console.log('Auth middleware: Signature verified successfully!', {
-      address: signInMessage.message.address,
+      address: walletAddress,
       signatureLength: signInMessage.signature.length,
-      noncePrefix: signInMessage.message.nonce.substring(0, 8),
-      expiresAt: signInMessage.message.expirationTime,
+      expiresAt: typeof signInMessage.message === 'string' 
+        ? parseHumanReadableMessage(signInMessage.message)?.expirationTime
+        : signInMessage.message.expirationTime,
     });
 
     // Since there's no User model in the Prisma schema, we'll store wallet info in the request
     // for downstream handlers to use
-    const walletAddress = signInMessage.message.address;
     console.log('Auth middleware: Valid auth for wallet', walletAddress);
+
+    // Get the issued date
+    const issuedAt = typeof signInMessage.message === 'string'
+      ? parseHumanReadableMessage(signInMessage.message)?.issuedAt
+      : signInMessage.message.issuedAt;
 
     // Attach the wallet to the request object for the API route to handle
     (req as any).wallet = {
       address: walletAddress,
-      sigDate: signInMessage.message.issuedAt,
+      sigDate: issuedAt || new Date().toISOString(),
     };
 
     // Continue to the API route

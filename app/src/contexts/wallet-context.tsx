@@ -314,11 +314,11 @@ function WalletContextContent({ children }: { children: ReactNode }) {
         return true;
       }
 
-      // Create a signature message for the wallet to sign
+      // Create a human-readable message for the wallet to sign
       const message = createSignatureMessage(publicKey.toBase58());
 
       // Create a UTF-8 encoded message that the wallet can sign
-      const encodedMessage = new TextEncoder().encode(JSON.stringify(message));
+      const encodedMessage = new TextEncoder().encode(message);
 
       // Ask the wallet to sign the message
       const signature = await adapterSignMessage(encodedMessage);
@@ -331,21 +331,28 @@ function WalletContextContent({ children }: { children: ReactNode }) {
       // Store in the same format that will be verified on the server
       const signatureBase64 = Buffer.from(signature).toString('base64');
 
-      // Create the auth token
+      // Create the auth token with the text format indicator
       const signInMessage = {
         message,
         signature: signatureBase64,
+        messageFormat: 'text'
       };
 
       // Encode the token for storage and auth headers
       const token = Buffer.from(JSON.stringify(signInMessage)).toString('base64');
+
+      // Extract expiration from message
+      const expiresMatch = message.match(/Expires: (.+)/);
+      const expiresDate = expiresMatch 
+        ? new Date(expiresMatch[1] + 'Z') 
+        : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
       // Store the token in localStorage and cookies
       if (typeof localStorage !== 'undefined') {
         localStorage.setItem('solana_auth_token', token);
       }
       setCookie('solana_auth_token', token, {
-        expires: new Date(message.expirationTime),
+        expires: expiresDate,
         path: '/',
       });
 
