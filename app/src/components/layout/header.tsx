@@ -276,25 +276,6 @@ export function Header() {
                     </div>
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
-                  <DropdownMenuGroup>
-                    <DropdownMenuItem asChild>
-                      <Link href="/dashboard">
-                        <div className="flex items-center w-full">
-                          <LayoutDashboard className="h-4 w-4 mr-2" />
-                          <span>Dashboard</span>
-                        </div>
-                      </Link>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem>
-                      <User className="h-4 w-4 mr-2" />
-                      <span>Profile</span>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem>
-                      <Settings className="h-4 w-4 mr-2" />
-                      <span>Settings</span>
-                    </DropdownMenuItem>
-                  </DropdownMenuGroup>
-                  <DropdownMenuSeparator />
                   <DropdownMenuItem className="text-red-600" onClick={handleLogout}>
                     <LogOut className="h-4 w-4 mr-2" />
                     <span>Log out</span>

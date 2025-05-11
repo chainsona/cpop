@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useWalletContext } from '@/contexts/wallet-context';
 import { Button } from '@/components/ui/button';
-import { Loader2, Wallet, Check, LogIn } from 'lucide-react';
+import { Loader2, Wallet, Check, LogIn, Copy, LogOut } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -149,16 +149,17 @@ export function ConnectWallet({
         variant={variant}
         size={size}
         disabled={connecting}
+        className="flex items-center gap-2"
       >
         {connecting ? (
           <>
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            Connecting
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <span>Connecting...</span>
           </>
         ) : (
           <>
-            <Wallet className="mr-2 h-4 w-4" />
-            Connect Wallet
+            <Wallet className="h-4 w-4" />
+            <span>Connect Wallet</span>
           </>
         )}
       </Button>
@@ -178,34 +179,44 @@ export function ConnectWallet({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" size={size} className={isAuthenticated ? "border-green-200 bg-green-50 text-green-700 hover:bg-green-100" : ""}>
-          <Wallet className="mr-2 h-4 w-4" />
-          {isAuthenticated && <Check className="h-3 w-3 mr-1" />}
+        <Button 
+          variant="outline" 
+          size={size} 
+          className={isAuthenticated 
+            ? "border-green-200 bg-green-50 text-green-700 hover:bg-green-100 flex items-center gap-2" 
+            : "flex items-center gap-2"
+          }
+        >
+          <Wallet className="h-4 w-4" />
+          {isAuthenticated && <Check className="h-3 w-3" />}
           {showAddress && formattedAddress}
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        <DropdownMenuLabel>Wallet</DropdownMenuLabel>
+        <DropdownMenuLabel>Solana Wallet</DropdownMenuLabel>
+        <DropdownMenuItem disabled className="opacity-100 cursor-default">
+          {formattedAddress} {isAuthenticated && <Check className="h-3 w-3 ml-2 text-green-600" />}
+        </DropdownMenuItem>
         <DropdownMenuSeparator />
         {walletAddress && (
           <DropdownMenuItem onClick={copyToClipboard}>
+            <Copy className="h-4 w-4 mr-2" />
             {isClipboardCopied ? 'Copied!' : 'Copy Address'}
           </DropdownMenuItem>
         )}
-        {!isAuthenticated ? (
+        {!isAuthenticated && (
           <DropdownMenuItem onClick={handleAuthenticate} disabled={isAuthenticating}>
             <LogIn className="h-4 w-4 mr-2" />
             {isAuthenticating ? 'Authenticating...' : 'Authenticate'}
           </DropdownMenuItem>
-        ) : (
-          <DropdownMenuItem className="text-green-600">
-            <Check className="h-4 w-4 mr-2" />
-            Authenticated
-          </DropdownMenuItem>
         )}
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={handleDisconnect}>
-          Disconnect
+        <DropdownMenuItem 
+          onClick={handleDisconnect}
+          className="text-red-500 focus:bg-red-50 focus:text-red-600"
+        >
+          <LogOut className="h-4 w-4 mr-2" />
+          Log out
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
