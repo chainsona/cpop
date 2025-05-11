@@ -1,11 +1,16 @@
-import { Metadata } from 'next';
+import { Metadata, Viewport } from 'next';
 import { CreatePOAP } from '@/components/CreatePOAP';
 import { CreateExamplePOAP } from '@/components/poap/create-example-poap';
-import { generateMetadata as baseGenerateMetadata } from '@/lib/utils/metadata';
+import { 
+  generateMetadata as baseGenerateMetadata,
+  generateViewport 
+} from '@/lib/utils/metadata';
 
 export const generateMetadata = (): Metadata => {
   return baseGenerateMetadata('Create POAP', 'Create a new Proof of Attendance Protocol token');
 };
+
+export const viewport: Viewport = generateViewport();
 
 export default function CreatePOAPPage() {
   return (

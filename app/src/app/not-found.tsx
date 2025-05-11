@@ -1,12 +1,17 @@
-import { Metadata } from 'next';
+import { Metadata, Viewport } from 'next';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { generateMetadata as baseGenerateMetadata } from '@/lib/utils/metadata';
+import { 
+  generateMetadata as baseGenerateMetadata,
+  generateViewport
+} from '@/lib/utils/metadata';
 
 export const metadata: Metadata = baseGenerateMetadata(
   'Page Not Found',
   'The requested page could not be found'
 );
+
+export const viewport: Viewport = generateViewport();
 
 export default function NotFound() {
   return (

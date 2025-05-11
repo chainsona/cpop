@@ -10,12 +10,15 @@ import bs58 from 'bs58';
 
 const RPC_ENDPOINT = process.env.SOLANA_RPC_ENDPOINT || '';
 
-type Params = Promise<{
+interface Params {
   id: string;
-}>;
+}
 
 // GET endpoint to fetch token supply from blockchain for a POAP
-async function getTokenBlockchainSupplyHandler(req: NextRequest, { params }: { params: Params }) {
+async function getTokenBlockchainSupplyHandler(
+  req: NextRequest,
+  { params }: { params: Promise<Params> }
+) {
   try {
     // Check for Solana wallet auth first
     const walletAddress = (req as any).wallet?.address;
@@ -82,13 +85,18 @@ async function getTokenBlockchainSupplyHandler(req: NextRequest, { params }: { p
       // Check if TOKEN_MINT_AUTHORITY_SECRET env var exists
       if (!process.env.TOKEN_MINT_AUTHORITY_SECRET) {
         console.error('TOKEN_MINT_AUTHORITY_SECRET environment variable is not configured');
-        return NextResponse.json({ 
-          error: 'Missing TOKEN_MINT_AUTHORITY_SECRET environment variable' 
-        }, { status: 500 });
+        return NextResponse.json(
+          {
+            error: 'Missing TOKEN_MINT_AUTHORITY_SECRET environment variable',
+          },
+          { status: 500 }
+        );
       }
 
       // Get the mint authority keypair from the secret key
-      const mintAuthority = Keypair.fromSecretKey(bs58.decode(process.env.TOKEN_MINT_AUTHORITY_SECRET));
+      const mintAuthority = Keypair.fromSecretKey(
+        bs58.decode(process.env.TOKEN_MINT_AUTHORITY_SECRET)
+      );
       const mintAuthorityPublicKey = mintAuthority.publicKey;
       console.log(`Using mint authority public key: ${mintAuthorityPublicKey.toBase58()}`);
 
@@ -98,20 +106,24 @@ async function getTokenBlockchainSupplyHandler(req: NextRequest, { params }: { p
 
       try {
         // Log connection attempt
-        console.log(`Attempting to get token accounts for authority ${mintAuthorityPublicKey.toBase58().slice(0, 8)}... and mint ${mintPublicKey.toBase58().slice(0, 8)}...`);
-        
-        // Get the authority's token account address
-        const authorityAtaInfo = await connection.getTokenAccountsByOwner(
-          mintAuthorityPublicKey,
-          { mint: mintPublicKey, programId: TOKEN_2022_PROGRAM_ID }
+        console.log(
+          `Attempting to get token accounts for authority ${mintAuthorityPublicKey.toBase58().slice(0, 8)}... and mint ${mintPublicKey.toBase58().slice(0, 8)}...`
         );
+
+        // Get the authority's token account address
+        const authorityAtaInfo = await connection.getTokenAccountsByOwner(mintAuthorityPublicKey, {
+          mint: mintPublicKey,
+          programId: TOKEN_2022_PROGRAM_ID,
+        });
 
         console.log(`Found ${authorityAtaInfo.value.length} token account(s) for authority`);
 
         if (authorityAtaInfo.value.length > 0) {
           const authorityAta = authorityAtaInfo.value[0].pubkey;
-          console.log(`Getting account info for authority ATA: ${authorityAta.toBase58().slice(0, 8)}...`);
-          
+          console.log(
+            `Getting account info for authority ATA: ${authorityAta.toBase58().slice(0, 8)}...`
+          );
+
           const accountInfo = await getAccount(
             connection,
             authorityAta,
@@ -130,19 +142,21 @@ async function getTokenBlockchainSupplyHandler(req: NextRequest, { params }: { p
 
       // Calculate distributed tokens (total supply - authority balance)
       const distributedTokens = totalSupply - authorityBalance;
-      console.log(`Calculated token distribution: Total=${totalSupply}, Authority=${authorityBalance}, Distributed=${distributedTokens}`);
+      console.log(
+        `Calculated token distribution: Total=${totalSupply}, Authority=${authorityBalance}, Distributed=${distributedTokens}`
+      );
 
       return NextResponse.json({
         tokenSupply: totalSupply,
         authorityBalance: authorityBalance,
-        distributedTokens: distributedTokens
+        distributedTokens: distributedTokens,
       });
     } catch (error) {
       console.error('Error fetching blockchain token data:', error);
       return NextResponse.json(
         {
           error: 'Failed to fetch blockchain token data',
-          details: error instanceof Error ? error.message : 'Unknown error'
+          details: error instanceof Error ? error.message : 'Unknown error',
         },
         { status: 500 }
       );
@@ -154,5 +168,5 @@ async function getTokenBlockchainSupplyHandler(req: NextRequest, { params }: { p
 }
 
 // Export the handler wrapped with auth middleware
-export const GET = (req: NextRequest, ctx: { params: Params }) =>
+export const GET = (req: NextRequest, ctx: { params: Promise<Params> }) =>
   apiMiddleware(req, async () => getTokenBlockchainSupplyHandler(req, ctx));

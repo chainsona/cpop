@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { Inter } from 'next/font/google';
 import { PageTitleProvider } from '@/contexts/page-title-context';
 import { cn } from '@/lib/utils';
@@ -49,11 +49,16 @@ export const metadata: Metadata = {
       'Create memorable digital tokens for your events with our easy-to-use POAP platform.',
     creator: '@poapplatform',
   },
-  viewport: 'width=device-width, initial-scale=1',
   robots: 'index, follow',
   alternates: {
     canonical: 'https://poapplatform.com',
   },
+};
+
+// Add a separate viewport export
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

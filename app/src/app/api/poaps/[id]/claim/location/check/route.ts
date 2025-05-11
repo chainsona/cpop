@@ -2,12 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
 // Function to calculate distance between two points using Haversine formula
-function calculateDistance(
-  lat1: number,
-  lon1: number,
-  lat2: number,
-  lon2: number
-): number {
+function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const R = 6371e3; // Earth radius in meters
   const φ1 = (lat1 * Math.PI) / 180;
   const φ2 = (lat2 * Math.PI) / 180;
@@ -22,21 +17,19 @@ function calculateDistance(
   return R * c; // Distance in meters
 }
 
-export async function POST(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
-  const poapId = params.id;
-  
+interface Params {
+  id: string;
+}
+
+export async function POST(request: NextRequest, { params }: { params: Promise<Params> }) {
+  const { id: poapId } = await params;
+
   try {
     // Get the user location from the request body
     const { latitude, longitude } = await request.json();
 
     if (typeof latitude !== 'number' || typeof longitude !== 'number') {
-      return NextResponse.json(
-        { message: 'Invalid location data' },
-        { status: 400 }
-      );
+      return NextResponse.json({ message: 'Invalid location data' }, { status: 400 });
     }
 
     // Find the location-based distribution method for this POAP
@@ -62,10 +55,7 @@ export async function POST(
     const locationData = locationMethod.locationBased;
 
     // Check if claim method has valid coordinates
-    if (
-      !locationData.latitude ||
-      !locationData.longitude
-    ) {
+    if (!locationData.latitude || !locationData.longitude) {
       return NextResponse.json(
         { message: 'Location coordinates not configured properly' },
         { status: 400 }
@@ -76,9 +66,9 @@ export async function POST(
     const now = new Date();
     if (locationData.startDate && new Date(locationData.startDate) > now) {
       return NextResponse.json(
-        { 
+        {
           inRange: false,
-          message: 'Location-based claim is not yet active' 
+          message: 'Location-based claim is not yet active',
         },
         { status: 200 }
       );
@@ -86,23 +76,20 @@ export async function POST(
 
     if (locationData.endDate && new Date(locationData.endDate) < now) {
       return NextResponse.json(
-        { 
+        {
           inRange: false,
-          message: 'Location-based claim has expired' 
+          message: 'Location-based claim has expired',
         },
         { status: 200 }
       );
     }
 
     // Check max claims if specified
-    if (
-      locationData.maxClaims !== null &&
-      locationData.claimCount >= locationData.maxClaims
-    ) {
+    if (locationData.maxClaims !== null && locationData.claimCount >= locationData.maxClaims) {
       return NextResponse.json(
-        { 
+        {
           inRange: false,
-          message: 'Maximum number of claims reached' 
+          message: 'Maximum number of claims reached',
         },
         { status: 200 }
       );
@@ -125,18 +112,15 @@ export async function POST(
       city: locationData.city,
       message: isInRange
         ? `You are within the claim area in ${locationData.city}`
-        : `You are ${Math.round(distance)}m away from the claim area`
+        : `You are ${Math.round(distance)}m away from the claim area`,
     });
   } catch (error) {
     console.error('Location check error:', error);
-    return NextResponse.json(
-      { message: 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ message: 'Internal server error' }, { status: 500 });
   }
 }
 
 // Add OPTIONS method for CORS preflight requests
 export async function OPTIONS() {
   return NextResponse.json({}, { status: 200 });
-} 
+}

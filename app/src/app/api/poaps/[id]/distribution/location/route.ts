@@ -8,9 +8,9 @@ interface Params {
 /**
  * API endpoint to get location-based distribution method details for a POAP
  */
-export async function GET(request: NextRequest, { params }: { params: Params }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<Params> }) {
   try {
-    const poapId = params.id;
+    const { id: poapId } = await params;
 
     // Fetch the POAP location-based distribution method
     const distributionMethod = await prisma.distributionMethod.findFirst({

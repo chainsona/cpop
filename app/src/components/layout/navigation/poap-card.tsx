@@ -14,6 +14,8 @@ export function POAPCard({ poap, onClick, type = 'full' }: POAPCardProps) {
     Published: 'bg-blue-100 text-blue-800',
     Distributed: 'bg-green-100 text-green-800',
     Draft: 'bg-neutral-100 text-neutral-800',
+    Unclaimable: 'bg-amber-100 text-amber-800',
+    Disabled: 'bg-red-100 text-red-800',
   };
 
   if (type === 'compact') {
@@ -75,4 +77,4 @@ export function POAPCard({ poap, onClick, type = 'full' }: POAPCardProps) {
       <ChevronRight className="h-5 w-5 text-neutral-400 opacity-0 group-hover:opacity-100 transition-opacity" />
     </button>
   );
-} 
+}

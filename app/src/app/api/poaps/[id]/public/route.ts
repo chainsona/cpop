@@ -6,7 +6,7 @@ type Params = Promise<{
 }>;
 
 // Get public POAP details by ID without requiring authentication
-export async function GET(request: NextRequest, { params }: { params: Params }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<Params> }) {
   try {
     const { id } = await params;
 

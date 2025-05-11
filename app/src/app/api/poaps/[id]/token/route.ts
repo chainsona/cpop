@@ -9,7 +9,7 @@ type Params = Promise<{
 }>;
 
 // GET endpoint to fetch token information for a POAP
-async function getTokenHandler(req: NextRequest, { params }: { params: Params }) {
+async function getTokenHandler(req: NextRequest, { params }: { params: Promise<Params> }) {
   try {
     // Check for Solana wallet auth first
     const walletAddress = (req as any).wallet?.address;
@@ -92,5 +92,5 @@ async function getTokenHandler(req: NextRequest, { params }: { params: Params })
 }
 
 // Export the handler wrapped with auth middleware
-export const GET = (req: NextRequest, ctx: { params: Params }) =>
+export const GET = (req: NextRequest, ctx: { params: Promise<Params> }) =>
   apiMiddleware(req, async () => getTokenHandler(req, ctx));

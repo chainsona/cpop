@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
-  const poapId = params.id;
+interface Params {
+  id: string;
+}
+
+export async function GET(request: NextRequest, { params }: { params: Promise<Params> }) {
+  const { id: poapId } = await params;
 
   try {
     console.log(`Retrieving claim methods for POAP: ${poapId}`);

@@ -5,17 +5,18 @@ import { generateClaimId } from '@/lib/claims';
 const INTERNAL_API_URL = process.env.INTERNAL_API_URL || 'http://localhost:3000';
 const INTERNAL_API_KEY = process.env.INTERNAL_API_KEY || 'your-internal-api-key';
 
-export async function POST(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+interface Params {
+  id: string;
+}
+
+export async function POST(request: NextRequest, { params }: { params: Promise<Params> }) {
   // Get the POAP ID from the route params
-  const poapId = params.id;
+  const { id: poapId } = await params;
 
   try {
     // Verify user is authenticated
     const authResult = await verifyAuth(request);
-    
+
     if (!authResult.isAuthenticated) {
       return NextResponse.json(
         { message: 'Authentication required to claim POAP' },
@@ -38,33 +39,29 @@ export async function POST(
     const { secretWord } = body;
 
     if (!secretWord) {
-      return NextResponse.json(
-        { message: 'Secret word is required' },
-        { status: 400 }
-      );
+      return NextResponse.json({ message: 'Secret word is required' }, { status: 400 });
     }
 
-    console.log(`Processing claim for POAP ${poapId} with wallet ${walletAddress.substring(0, 8)}...`);
+    console.log(
+      `Processing claim for POAP ${poapId} with wallet ${walletAddress.substring(0, 8)}...`
+    );
 
     // Get the POAP details from the database to check validity
     try {
       const poapResponse = await fetch(`${INTERNAL_API_URL}/poaps/${poapId}`, {
         headers: {
-          'Authorization': `Internal ${INTERNAL_API_KEY}`
-        }
+          Authorization: `Internal ${INTERNAL_API_KEY}`,
+        },
       });
 
       if (!poapResponse.ok) {
         const errorText = await poapResponse.text();
         console.error(`POAP fetch error: Status ${poapResponse.status}, Response: ${errorText}`);
-        
+
         if (poapResponse.status === 404) {
-          return NextResponse.json(
-            { message: 'POAP not found' },
-            { status: 404 }
-          );
+          return NextResponse.json({ message: 'POAP not found' }, { status: 404 });
         }
-        
+
         return NextResponse.json(
           { message: `Failed to verify POAP details: ${poapResponse.status}` },
           { status: 500 }
@@ -72,7 +69,7 @@ export async function POST(
       }
 
       const poapData = await poapResponse.json();
-      
+
       // Check if POAP is valid for claiming
       if (poapData.poap.status !== 'Published' && poapData.poap.status !== 'Distributed') {
         return NextResponse.json(
@@ -94,22 +91,24 @@ export async function POST(
         `${INTERNAL_API_URL}/poaps/${poapId}/distribution/secret`,
         {
           headers: {
-            'Authorization': `Internal ${INTERNAL_API_KEY}`
-          }
+            Authorization: `Internal ${INTERNAL_API_KEY}`,
+          },
         }
       );
 
       if (!distributionResponse.ok) {
         const errorText = await distributionResponse.text();
-        console.error(`Distribution method fetch error: Status ${distributionResponse.status}, Response: ${errorText}`);
-        
+        console.error(
+          `Distribution method fetch error: Status ${distributionResponse.status}, Response: ${errorText}`
+        );
+
         if (distributionResponse.status === 404) {
           return NextResponse.json(
             { message: 'Secret word claim method not available for this POAP' },
             { status: 404 }
           );
         }
-        
+
         return NextResponse.json(
           { message: `Failed to verify claim method: ${distributionResponse.status}` },
           { status: 500 }
@@ -117,7 +116,7 @@ export async function POST(
       }
 
       const distributionData = await distributionResponse.json();
-      
+
       // Check if the method is disabled
       if (distributionData.disabled) {
         return NextResponse.json(
@@ -128,10 +127,7 @@ export async function POST(
 
       // Verify the secret word matches
       if (distributionData.secretWord !== secretWord) {
-        return NextResponse.json(
-          { message: 'Invalid secret word' },
-          { status: 400 }
-        );
+        return NextResponse.json({ message: 'Invalid secret word' }, { status: 400 });
       }
     } catch (error) {
       console.error('Error fetching distribution method:', error);
@@ -147,19 +143,19 @@ export async function POST(
         `${INTERNAL_API_URL}/poaps/${poapId}/claims/check?walletAddress=${walletAddress}`,
         {
           headers: {
-            'Authorization': `Internal ${INTERNAL_API_KEY}`
-          }
+            Authorization: `Internal ${INTERNAL_API_KEY}`,
+          },
         }
       );
 
       if (claimStatusResponse.ok) {
         const claimStatus = await claimStatusResponse.json();
-        
+
         if (claimStatus.hasClaimed) {
           return NextResponse.json(
-            { 
+            {
               message: 'You have already claimed this POAP',
-              claimId: claimStatus.claimId 
+              claimId: claimStatus.claimId,
             },
             { status: 400 }
           );
@@ -167,7 +163,9 @@ export async function POST(
       } else if (claimStatusResponse.status !== 404) {
         // Only log as an error if it's not a 404 (which just means "not claimed yet")
         const errorText = await claimStatusResponse.text();
-        console.error(`Claim status check error: Status ${claimStatusResponse.status}, Response: ${errorText}`);
+        console.error(
+          `Claim status check error: Status ${claimStatusResponse.status}, Response: ${errorText}`
+        );
       }
     } catch (error) {
       console.error('Error checking claim status:', error);
@@ -176,31 +174,30 @@ export async function POST(
 
     // All checks passed - process the claim
     const claimId = generateClaimId();
-    
+
     // Submit claim to the backend/database
     try {
-      const claimResponse = await fetch(
-        `${INTERNAL_API_URL}/poaps/${poapId}/claims`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Internal ${INTERNAL_API_KEY}`,
-            'Content-Type': 'application/json'
+      const claimResponse = await fetch(`${INTERNAL_API_URL}/poaps/${poapId}/claims`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Internal ${INTERNAL_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          claimId,
+          walletAddress,
+          method: 'secret',
+          metadata: {
+            secretWord: secretWord,
           },
-          body: JSON.stringify({
-            claimId,
-            walletAddress,
-            method: 'secret',
-            metadata: {
-              secretWord: secretWord,
-            }
-          })
-        }
-      );
+        }),
+      });
 
       if (!claimResponse.ok) {
         const errorText = await claimResponse.text();
-        console.error(`Claim processing error: Status ${claimResponse.status}, Response: ${errorText}`);
+        console.error(
+          `Claim processing error: Status ${claimResponse.status}, Response: ${errorText}`
+        );
         return NextResponse.json(
           { message: `Failed to process claim: ${claimResponse.status}` },
           { status: 500 }
@@ -214,7 +211,7 @@ export async function POST(
       return NextResponse.json({
         message: 'POAP claimed successfully',
         claimId: claimData.claimId,
-        status: 'success'
+        status: 'success',
       });
     } catch (error) {
       console.error('Error processing claim:', error);
@@ -223,13 +220,9 @@ export async function POST(
         { status: 500 }
       );
     }
-    
   } catch (error) {
     console.error('Error in secret word claim:', error);
-    return NextResponse.json(
-      { message: 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ message: 'Internal server error' }, { status: 500 });
   }
 }
 

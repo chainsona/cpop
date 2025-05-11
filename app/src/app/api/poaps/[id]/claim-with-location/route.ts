@@ -3,10 +3,6 @@ import { prisma } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth';
 import { transferTokenToWallet } from '@/lib/token-utils';
 
-interface Params {
-  id: string;
-}
-
 // Function to calculate distance between two points using the Haversine formula
 function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const R = 6371e3; // Earth's radius in meters
@@ -23,14 +19,18 @@ function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: numbe
   return R * c; // distance in meters
 }
 
+interface Params {
+  id: string;
+}
+
 /**
  * API endpoint to verify location and claim a POAP in a single step
  */
-export async function POST(request: NextRequest, { params }: { params: Params }) {
+export async function POST(request: NextRequest, { params }: { params: Promise<Params> }) {
   try {
     // Authenticate the request
     const auth = await verifyAuth(request);
-    
+
     if (!auth.isAuthenticated || !auth.walletAddress) {
       return NextResponse.json(
         {
@@ -40,21 +40,23 @@ export async function POST(request: NextRequest, { params }: { params: Params })
         { status: 401 }
       );
     }
-    
+
     const walletAddress = auth.walletAddress;
-    const poapId = params.id;
-    
+    const { id: poapId } = await params;
+
     // Parse request body
     const body = await request.json();
     const { distributionMethodId, userLatitude, userLongitude, method } = body;
-    
-    if (!distributionMethodId || !method || userLatitude === undefined || userLongitude === undefined) {
-      return NextResponse.json(
-        { error: 'Missing required parameters' },
-        { status: 400 }
-      );
+
+    if (
+      !distributionMethodId ||
+      !method ||
+      userLatitude === undefined ||
+      userLongitude === undefined
+    ) {
+      return NextResponse.json({ error: 'Missing required parameters' }, { status: 400 });
     }
-    
+
     // Validate coordinates
     if (
       typeof userLatitude !== 'number' ||
@@ -65,14 +67,14 @@ export async function POST(request: NextRequest, { params }: { params: Params })
       userLongitude > 180
     ) {
       return NextResponse.json(
-        { 
+        {
           error: 'LOCATION_VERIFICATION_FAILED',
-          message: 'Invalid coordinates' 
+          message: 'Invalid coordinates',
         },
         { status: 400 }
       );
     }
-    
+
     // Validate that method is LocationBased
     if (method !== 'LocationBased') {
       return NextResponse.json(
@@ -80,7 +82,7 @@ export async function POST(request: NextRequest, { params }: { params: Params })
         { status: 400 }
       );
     }
-    
+
     // Get distribution method details
     const distributionMethod = await prisma.distributionMethod.findUnique({
       where: {
@@ -95,31 +97,28 @@ export async function POST(request: NextRequest, { params }: { params: Params })
         poap: true,
       },
     });
-    
+
     if (!distributionMethod || !distributionMethod.locationBased) {
       return NextResponse.json(
-        { 
+        {
           error: 'LOCATION_VERIFICATION_FAILED',
-          message: 'Location-based distribution method not found' 
+          message: 'Location-based distribution method not found',
         },
         { status: 404 }
       );
     }
-    
+
     // Check if POAP exists and is claimable
     if (!distributionMethod.poap) {
-      return NextResponse.json(
-        { error: 'POAP not found' },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: 'POAP not found' }, { status: 404 });
     }
-    
+
     // Check if date is within valid range
     const now = new Date();
     if (
-      (distributionMethod.locationBased.startDate && 
+      (distributionMethod.locationBased.startDate &&
         now < new Date(distributionMethod.locationBased.startDate)) ||
-      (distributionMethod.locationBased.endDate && 
+      (distributionMethod.locationBased.endDate &&
         now > new Date(distributionMethod.locationBased.endDate))
     ) {
       return NextResponse.json(
@@ -130,7 +129,7 @@ export async function POST(request: NextRequest, { params }: { params: Params })
         { status: 403 }
       );
     }
-    
+
     // Check if max claims reached
     if (
       distributionMethod.locationBased.maxClaims &&
@@ -144,7 +143,7 @@ export async function POST(request: NextRequest, { params }: { params: Params })
         { status: 403 }
       );
     }
-    
+
     // Check if user already claimed this POAP
     const existingClaim = await prisma.pOAPClaim.findUnique({
       where: {
@@ -154,7 +153,7 @@ export async function POST(request: NextRequest, { params }: { params: Params })
         },
       },
     });
-    
+
     if (existingClaim) {
       return NextResponse.json(
         {
@@ -164,7 +163,7 @@ export async function POST(request: NextRequest, { params }: { params: Params })
         { status: 403 }
       );
     }
-    
+
     // Calculate distance between user and location
     const distance = calculateDistance(
       userLatitude,
@@ -172,10 +171,10 @@ export async function POST(request: NextRequest, { params }: { params: Params })
       distributionMethod.locationBased.latitude || 0,
       distributionMethod.locationBased.longitude || 0
     );
-    
+
     // Check if user is within radius
     const isWithinRadius = distance <= distributionMethod.locationBased.radius;
-    
+
     if (!isWithinRadius) {
       return NextResponse.json(
         {
@@ -187,32 +186,26 @@ export async function POST(request: NextRequest, { params }: { params: Params })
         { status: 403 }
       );
     }
-    
+
     // Location verified successfully, proceed with claim
-    
+
     // Fetch the token information for this POAP
     const tokenInfo = await prisma.poapToken.findFirst({
-      where: { 
-        poapId: poapId
+      where: {
+        poapId: poapId,
       },
       select: {
-        mintAddress: true
-      }
+        mintAddress: true,
+      },
     });
-    
+
     // Check if token is configured
     if (!tokenInfo || !tokenInfo.mintAddress) {
-      return NextResponse.json(
-        { error: 'POAP token not configured' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'POAP token not configured' }, { status: 400 });
     }
-    
+
     // Transfer token to the user's wallet
-    const mintResult = await transferTokenToWallet(
-      tokenInfo.mintAddress,
-      walletAddress
-    );
+    const mintResult = await transferTokenToWallet(tokenInfo.mintAddress, walletAddress);
 
     if (!mintResult.success) {
       return NextResponse.json(
@@ -220,13 +213,13 @@ export async function POST(request: NextRequest, { params }: { params: Params })
         { status: 500 }
       );
     }
-    
+
     // Increment claim count
     await prisma.locationBased.update({
       where: { id: distributionMethod.locationBased.id },
       data: { claimCount: { increment: 1 } },
     });
-    
+
     // Create the claim record with transaction signature
     const claim = await prisma.pOAPClaim.create({
       data: {
@@ -236,7 +229,7 @@ export async function POST(request: NextRequest, { params }: { params: Params })
         transactionSignature: mintResult.signature,
       },
     });
-    
+
     // Return success response
     return NextResponse.json({
       message: 'POAP claimed successfully',
@@ -246,15 +239,14 @@ export async function POST(request: NextRequest, { params }: { params: Params })
         transactionSignature: mintResult.signature,
       },
     });
-    
   } catch (error) {
     console.error('Error claiming POAP with location verification:', error);
     return NextResponse.json(
-      { 
+      {
         error: 'Failed to claim POAP',
         message: error instanceof Error ? error.message : 'An unknown error occurred',
-      }, 
+      },
       { status: 500 }
     );
   }
-} 
+}

@@ -42,7 +42,7 @@ export default function POAPTokenPage() {
     setError,
     setIsLoading,
     hasDistributionMethods,
-    isPolling,
+    isAnyOperationInProgress,
     blockchainData,
     isBlockchainLoading,
     blockchainError,
@@ -50,12 +50,16 @@ export default function POAPTokenPage() {
     isMetadataLoading,
     metadataError,
     fetchTokenData,
-    fetchBlockchainTokenData,
+    fetchBlockchainData,
     fetchMetadata,
     handleMintTokens,
     handleManualRefresh,
-    isAnyOperationInProgress,
   } = useTokenData(id, isAuthenticated, authenticate);
+
+  // Add type guards for string checking
+  const isErrorString = (error: unknown): error is string => {
+    return typeof error === 'string';
+  };
 
   // Helper function to attempt wallet connection - memoized to avoid dependency issues
   const connectWallet = useCallback(async () => {
@@ -109,9 +113,9 @@ export default function POAPTokenPage() {
         fetchTokenData()
           .then(() => {
             console.log('Token data loaded, fetching metadata');
-            // Pass false for forceRefresh to respect cache
+            // Pass a single forceRefresh parameter
             if (!isAnyOperationInProgress) {
-              return fetchMetadata(true, false);
+              return fetchMetadata(true);
             }
           })
           .catch(err => console.error('Error in data loading sequence:', err));
@@ -124,6 +128,16 @@ export default function POAPTokenPage() {
     };
   }, [isAuthenticated, fetchTokenData, fetchMetadata, isAnyOperationInProgress]);
 
+  // Add a proper wrapper for fetchTokenData that returns Promise<void>
+  const handleFetchTokenData = useCallback(async (): Promise<void> => {
+    await fetchTokenData();
+  }, [fetchTokenData]);
+
+  // Helper to check and safely use string methods on potentially non-string values
+  const safeStringIncludes = (value: unknown, searchString: string): boolean => {
+    return typeof value === 'string' && value.includes(searchString);
+  };
+
   // Auto-refresh metadata when needed
   useEffect(() => {
     let refreshInterval: NodeJS.Timeout | null = null;
@@ -133,7 +147,7 @@ export default function POAPTokenPage() {
     if (
       isAuthenticated &&
       metadataError &&
-      metadataError.includes('authorized') &&
+      safeStringIncludes(metadataError, 'authorized') &&
       !isRefreshing &&
       !isAnyOperationInProgress &&
       !hasTriggeredAutoRefresh.current
@@ -154,8 +168,9 @@ export default function POAPTokenPage() {
       isAuthenticated &&
       tokenData?.tokenMinted &&
       metadataError &&
-      (metadataError.includes('being prepared') || metadataError.includes('not available yet')) &&
-      !metadataError.includes('authorized') && // Skip for auth errors as we handle them differently
+      (safeStringIncludes(metadataError, 'being prepared') ||
+        safeStringIncludes(metadataError, 'not available yet')) &&
+      !safeStringIncludes(metadataError, 'authorized') && // Skip for auth errors as we handle them differently
       !isAnyOperationInProgress && // Don't set up refresh if any operation is in progress
       !refreshInterval // Only if we don't already have an interval
     ) {
@@ -165,10 +180,8 @@ export default function POAPTokenPage() {
         // Only refresh if no operation is in progress
         if (!isAnyOperationInProgress) {
           console.log('Auto-refreshing metadata (preparation state)');
-          // Force refresh in this case since we're specifically trying to get updated metadata
-          fetchMetadata(true, true).catch(err =>
-            console.error('Auto-refresh metadata error:', err)
-          );
+          // Force refresh with a single parameter
+          fetchMetadata(true).catch(err => console.error('Auto-refresh metadata error:', err));
         } else {
           console.log('Skipping auto-refresh - operation in progress');
         }
@@ -191,6 +204,11 @@ export default function POAPTokenPage() {
     isRefreshing,
     isAnyOperationInProgress,
   ]);
+
+  // Add a wrapper function for fetchBlockchainData
+  const handleFetchBlockchainData = useCallback(async (): Promise<void> => {
+    await fetchBlockchainData();
+  }, [fetchBlockchainData]);
 
   // Render wallet connection UI if not connected
   if (!isConnected) {
@@ -266,7 +284,7 @@ export default function POAPTokenPage() {
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-2xl font-bold">Token Management</h2>
           <div className="flex items-center gap-2">
-            {isPolling && (
+            {isAnyOperationInProgress && (
               <div className="text-xs text-neutral-500 flex items-center">
                 <RefreshCcw className="h-3 w-3 animate-spin mr-1" />
                 Syncing...
@@ -288,7 +306,7 @@ export default function POAPTokenPage() {
                 </TooltipTrigger>
                 <TooltipContent>
                   <p>Click to refresh token data and metadata</p>
-                  {metadataError?.includes('authorized') && (
+                  {safeStringIncludes(metadataError, 'authorized') && (
                     <p className="font-semibold text-red-500">Click to fix authorization errors</p>
                   )}
                 </TooltipContent>
@@ -321,7 +339,7 @@ export default function POAPTokenPage() {
             isConnected={isConnected}
             isAuthenticated={isAuthenticated}
             authenticate={authenticate}
-            fetchTokenData={fetchTokenData}
+            fetchTokenData={handleFetchTokenData}
             setIsLoading={setIsLoading}
             setError={setError}
             id={id}
@@ -379,7 +397,7 @@ export default function POAPTokenPage() {
               blockchainData={blockchainData}
               isBlockchainLoading={isBlockchainLoading}
               blockchainError={blockchainError}
-              fetchBlockchainTokenData={fetchBlockchainTokenData}
+              fetchBlockchainTokenData={handleFetchBlockchainData}
             />
 
             {/* Metadata Content - Always show metadata viewer */}

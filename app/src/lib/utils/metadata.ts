@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 
 // App name constant to ensure consistency with page-title-context
 const APP_NAME = 'POAP';
@@ -18,5 +18,17 @@ export function generateMetadata(
   return {
     title: `${title} | ${APP_NAME}`,
     description,
+  };
+}
+
+/**
+ * Generate viewport config for a page
+ * 
+ * @returns Viewport object for the page
+ */
+export function generateViewport(): Viewport {
+  return {
+    width: 'device-width',
+    initialScale: 1,
   };
 }

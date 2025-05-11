@@ -24,11 +24,15 @@ function calculateDistance(
   return R * c; // Distance in meters
 }
 
+interface Params {
+  id: string;
+}
+
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<Params> }
 ) {
-  const poapId = params.id;
+  const { id: poapId } = await params;
   
   try {
     // Verify user is authenticated

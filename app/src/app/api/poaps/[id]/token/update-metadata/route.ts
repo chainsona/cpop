@@ -19,7 +19,7 @@ type Params = Promise<{
  * POST handler for updating token metadata
  * This endpoint is called when POAP details have changed and the token metadata needs to be updated
  */
-async function postHandler(req: NextRequest, { params }: { params: Params }) {
+async function postHandler(req: NextRequest, { params }: { params: Promise<Params> }) {
   try {
     // Check for Solana wallet auth first
     const walletAddress = (req as any).wallet?.address;
@@ -172,5 +172,5 @@ async function postHandler(req: NextRequest, { params }: { params: Params }) {
 }
 
 // Export the handler wrapped with API middleware
-export const POST = (req: NextRequest, ctx: { params: Params }) =>
+export const POST = (req: NextRequest, ctx: { params: Promise<Params> }) =>
   apiMiddleware(req, async () => postHandler(req, ctx));

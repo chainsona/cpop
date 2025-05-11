@@ -22,25 +22,10 @@ export async function GET(request: NextRequest) {
     console.log(`Fetching claims for wallet: ${walletAddress.substring(0, 8)}...`);
 
     try {
-      // Find the user first to get their ID
-      const user = await prisma.user.findUnique({
+      // Find claims for this wallet address
+      const claims = await prisma.pOAPClaim.findMany({
         where: {
           walletAddress: walletAddress,
-        },
-      });
-
-      if (!user) {
-        console.log(`No user found for wallet address: ${walletAddress}`);
-        return NextResponse.json({
-          claims: [],
-          count: 0,
-        });
-      }
-
-      // Use poapToken model to get tokens owned by this user
-      const poapTokens = await prisma.poapToken.findMany({
-        where: {
-          ownerId: user.id,
         },
         include: {
           poap: {
@@ -57,19 +42,19 @@ export async function GET(request: NextRequest) {
         },
       });
 
-      // Format tokens as claims to maintain API compatibility
-      const claims = poapTokens.map(token => ({
-        id: token.id,
-        poapId: token.poapId,
-        walletAddress: walletAddress,
-        mintAddress: token.mintAddress,
-        createdAt: token.createdAt,
-        poap: token.poap,
+      // Format the response
+      const formattedClaims = claims.map(claim => ({
+        id: claim.id,
+        poapId: claim.poapId,
+        walletAddress: claim.walletAddress,
+        mintAddress: claim.transactionSignature || '',
+        createdAt: claim.createdAt,
+        poap: claim.poap,
       }));
 
       return NextResponse.json({
-        claims,
-        count: claims.length,
+        claims: formattedClaims,
+        count: formattedClaims.length,
       });
     } catch (error) {
       console.error('Error fetching wallet claims:', error);

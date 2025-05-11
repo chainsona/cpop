@@ -386,7 +386,7 @@ export default function POAPDistributionPage() {
                 // Update the token status when tokens are minted
                 setTokenStatus({
                   minted: true,
-                  supply: newSupply
+                  supply: newSupply || 0,
                 });
               }}
             />
