@@ -8,17 +8,46 @@ import { POAPActions } from './poap-actions';
 import { getStatusDisplay } from '@/lib/poap-utils';
 import { StatusIcon } from './status-icon';
 import { DistributionBadge } from './distribution-badge';
+import { useWalletContext } from '@/contexts/wallet-context';
+import { useEffect, useState } from 'react';
+import { XCircle } from 'lucide-react';
+import { StatusDisplay } from '@/types/poap';
 
 interface POAPCardProps {
   poap: PoapItem;
 }
 
 export function POAPCard({ poap }: POAPCardProps) {
-  const statusDisplay = getStatusDisplay(poap.status);
+  // Handle 'Disabled' status which isn't supported by the util function
+  let statusDisplay;
+  if (poap.status === 'Disabled') {
+    statusDisplay = {
+      label: 'Disabled',
+      color: 'text-red-600',
+      bgColor: 'bg-red-100',
+      borderColor: 'border-red-200',
+      iconName: 'XCircle',
+    };
+  } else {
+    statusDisplay = getStatusDisplay(poap.status as 'Draft' | 'Published' | 'Distributed' | 'Unclaimable');
+  }
+
+  const { isAuthenticated, walletAddress } = useWalletContext();
+  const [isCreator, setIsCreator] = useState(false);
 
   // Filter to only show active (not disabled or deleted) distribution methods
   const activeDistributionMethods =
     poap.distributionMethods?.filter(method => !method.disabled && !method.deleted) || [];
+
+  // Check if the current authenticated user is the creator
+  useEffect(() => {
+    if (poap.creator && isAuthenticated && walletAddress) {
+      // Compare current wallet address with creator's wallet address
+      setIsCreator(poap.creator.walletAddress === walletAddress);
+    } else {
+      setIsCreator(false);
+    }
+  }, [poap.creator, isAuthenticated, walletAddress]);
 
   return (
     <div
@@ -41,6 +70,7 @@ export function POAPCard({ poap }: POAPCardProps) {
           imageUrl={poap.imageUrl}
           title={poap.title}
           statusDisplay={statusDisplay}
+          isCreator={isCreator}
         />
 
         {/* Content Container */}

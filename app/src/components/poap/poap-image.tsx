@@ -8,9 +8,10 @@ interface POAPImageProps {
   imageUrl: string;
   title: string;
   statusDisplay?: StatusDisplay;
+  isCreator?: boolean;
 }
 
-export function POAPImage({ id, imageUrl, title, statusDisplay }: POAPImageProps) {
+export function POAPImage({ id, imageUrl, title, statusDisplay, isCreator = false }: POAPImageProps) {
   // Get a unique color palette for this POAP based on its ID
   const colorPalette = getColorPaletteForId(id);
   const safeImageUrl = getSafeImageUrl(imageUrl);
@@ -20,8 +21,8 @@ export function POAPImage({ id, imageUrl, title, statusDisplay }: POAPImageProps
       className="relative w-full md:w-48 lg:w-56 aspect-square flex-shrink-0 overflow-hidden rounded-lg"
       aria-label={`POAP image for ${title}`}
     >
-      {/* Status badge - only render if statusDisplay is defined */}
-      {statusDisplay && (
+      {/* Status badge - only render if statusDisplay is defined and user is creator */}
+      {statusDisplay && isCreator && (
         <div
           className={cn(
             'absolute top-2 left-2 z-20 px-2 py-1 rounded-md text-xs font-medium flex items-center gap-1.5',
