@@ -3,18 +3,22 @@
 import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useWalletContext } from '@/contexts/wallet-context';
-import { WalletAuth } from '@/components/wallet/wallet-auth';
 import { Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { usePageTitle } from '@/contexts/page-title-context';
+import { AuthWalletButton } from '@/components/wallet/auth-wallet-button';
+import { toast } from 'sonner';
 
 function AuthContent() {
-  const { isConnected } = useWalletContext();
+  const { isConnected, isAuthenticated: contextAuthenticated } = useWalletContext();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirectPath = searchParams.get('redirect') || '/';
+  // Support both redirect and returnUrl parameters
+  const redirectParam = searchParams.get('redirect');
+  const returnUrlParam = searchParams.get('returnUrl');
+  const redirectPath = returnUrlParam || redirectParam || '/';
   const { setPageTitle } = usePageTitle();
 
   // Set page title
@@ -37,28 +41,60 @@ function AuthContent() {
   // Check if the user is already authenticated
   useEffect(() => {
     const token = localStorage.getItem('solana_auth_token');
-    if (token) {
-      setIsAuthenticated(true);
-    }
+    const isAuth = !!token || contextAuthenticated;
+    
+    console.log('Checking authentication status:', { 
+      hasToken: !!token, 
+      contextAuthenticated,
+      redirectPath,
+      returnUrlParam,
+      redirectParam
+    });
+    
+    setIsAuthenticated(isAuth);
     setLoading(false);
-  }, []);
-
-  // Handle successful authentication by redirecting
-  useEffect(() => {
-    if (isAuthenticated) {
-      // Get the redirect path from localStorage or use default
-      const storedRedirect = localStorage.getItem('auth_redirect');
-      const targetPath = storedRedirect || redirectPath || '/';
-      
-      // Clear the stored redirect
-      localStorage.removeItem('auth_redirect');
-      
-      console.log('Authentication successful, redirecting to:', targetPath);
-      
-      // Navigate to the target path
-      router.push(targetPath);
+    
+    // If already authenticated, handle redirect immediately
+    if (isAuth) {
+      handleRedirect();
     }
-  }, [isAuthenticated, redirectPath, router]);
+  }, [contextAuthenticated, redirectPath, returnUrlParam, redirectParam]);
+
+  // Handle redirection after authentication status changes
+  useEffect(() => {
+    if (isAuthenticated && !loading) {
+      handleRedirect();
+    }
+  }, [isAuthenticated, loading]);
+
+  // Centralized redirect handling
+  const handleRedirect = () => {
+    // Get the redirect path from localStorage or use default
+    const storedRedirect = localStorage.getItem('auth_redirect');
+    const targetPath = returnUrlParam || redirectParam || storedRedirect || '/';
+    
+    // Clear the stored redirect
+    localStorage.removeItem('auth_redirect');
+    
+    console.log('Authentication successful, redirecting to:', targetPath);
+    
+    try {
+      // Navigate to the target path with slight delay to ensure state updates
+      setTimeout(() => {
+        router.push(targetPath);
+      }, 100);
+    } catch (error) {
+      console.error('Redirect error:', error);
+      toast.error('Failed to redirect after authentication');
+    }
+  };
+
+  // Handle successful authentication callback from button
+  const handleAuthSuccess = (token: string) => {
+    console.log('Auth success callback triggered');
+    setIsAuthenticated(true);
+    // Redirection will be handled by the useEffect
+  };
 
   if (loading) {
     return (
@@ -79,16 +115,16 @@ function AuthContent() {
           </p>
           {redirectPath && redirectPath !== '/' && (
             <p className="text-sm text-blue-500 mt-2">
-              You'll be redirected after authentication
+              You'll be redirected to: {redirectPath}
             </p>
           )}
         </div>
 
         <div className="flex flex-col gap-6">
-          <WalletAuth
-            buttonText="Authenticate with Wallet"
-            showConnectedState={true}
-            onAuthSuccess={() => setIsAuthenticated(true)}
+          <AuthWalletButton
+            text="Authenticate with Wallet"
+            onAuthSuccess={handleAuthSuccess}
+            className="w-full"
           />
 
           <div className="flex justify-center mt-4">
