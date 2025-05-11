@@ -145,30 +145,56 @@ export async function transferTokenToWallet(
 
 // Get all token accounts for a given wallet address
 export async function getTokensForWallet(walletAddress: string) {
-  const connection = new Connection(
-    process.env.NEXT_PUBLIC_SOLANA_RPC_URL || 'https://api.devnet.solana.com'
-  );
-  const pubKey = new PublicKey(walletAddress);
+  if (!walletAddress) {
+    throw new Error('Wallet address is required');
+  }
 
+  const rpcUrl = process.env.NEXT_PUBLIC_SOLANA_RPC_URL || 'https://api.devnet.solana.com';
+  
+  if (!rpcUrl) {
+    throw new Error('Solana RPC URL is not configured');
+  }
+  
+  const connection = new Connection(rpcUrl);
+  
   try {
+    const pubKey = new PublicKey(walletAddress);
+    
     // Get Token2022 accounts specifically
     const tokenAccounts = await connection.getParsedTokenAccountsByOwner(pubKey, {
       programId: TOKEN_2022_PROGRAM_ID,
     });
 
+    if (!tokenAccounts || !tokenAccounts.value) {
+      console.warn('No token accounts returned from RPC');
+      return [];
+    }
+
     console.log(
       `Found ${tokenAccounts.value.length} Token2022 accounts for wallet ${walletAddress.substring(0, 6)}...`
     );
 
-    return tokenAccounts.value.map(account => ({
-      mint: account.account.data.parsed.info.mint,
-      amount: account.account.data.parsed.info.tokenAmount.uiAmount,
-      decimals: account.account.data.parsed.info.tokenAmount.decimals,
-      isCompressed: true, // These are all Token2022 tokens
-    }));
+    return tokenAccounts.value.map(account => {
+      try {
+        return {
+          mint: account.account.data.parsed.info.mint,
+          amount: account.account.data.parsed.info.tokenAmount.uiAmount,
+          decimals: account.account.data.parsed.info.tokenAmount.decimals,
+          isCompressed: true, // These are all Token2022 tokens
+        };
+      } catch (parseError) {
+        console.error('Error parsing token account:', parseError);
+        return null;
+      }
+    }).filter(Boolean);
   } catch (error) {
     console.error('Error fetching Token2022 accounts:', error);
-    throw error;
+    // Add more detailed error info to help debugging
+    const errorMessage = error instanceof Error 
+      ? `${error.message} (${error.name})` 
+      : 'Unknown error format';
+    
+    throw new Error(`Failed to fetch token accounts: ${errorMessage}`);
   }
 }
 
@@ -177,40 +203,40 @@ export async function getPOAPsByMints(mintAddresses: string[]) {
   if (!mintAddresses.length) return [];
 
   try {
-    // Since we can't directly query by mint address in POAP (schema mismatch),
-    // let's first find the claims with matching mint addresses
-    const claims = await prisma.pOAPClaim.findMany({
+    // First get the POAP tokens with these mint addresses
+    const poapTokens = await prisma.poapToken.findMany({
       where: {
         mintAddress: {
           in: mintAddresses,
         },
       },
+      include: {
+        poap: true,
+      },
+    });
+
+    // Then get the claims associated with these POAPs
+    const poapIds = poapTokens.map(token => token.poapId);
+    const claims = await prisma.pOAPClaim.findMany({
+      where: {
+        poapId: {
+          in: poapIds,
+        },
+      },
       select: {
         poapId: true,
-        mintAddress: true,
+        walletAddress: true,
         transactionSignature: true,
         createdAt: true,
       },
     });
 
-    // Then get the POAPs for the found claims
-    const poapIds = [...new Set(claims.map(claim => claim.poapId))];
-    const poaps = await prisma.poap.findMany({
-      where: {
-        id: {
-          in: poapIds,
-        },
-      },
-    });
-
     // Associate the claims with their POAPs
-    return poaps.map(poap => {
-      const relatedClaims = claims.filter(claim => claim.poapId === poap.id);
-      return {
-        ...poap,
-        claims: relatedClaims,
-      };
-    });
+    return poapTokens.map(token => ({
+      ...token.poap,
+      mintAddress: token.mintAddress,
+      claims: claims.filter(claim => claim.poapId === token.poapId),
+    }));
   } catch (error) {
     console.error('Error fetching POAPs by mints:', error);
     throw error;

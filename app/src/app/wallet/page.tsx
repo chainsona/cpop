@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useWalletContext } from '@/contexts/wallet-context';
 import { ConnectWallet } from '@/components/wallet/connect-wallet';
-import { Wallet, ArrowLeft } from 'lucide-react';
+import { Wallet } from 'lucide-react';
 import { POAPTokenProps } from '@/components/wallet/poap-token-card';
 import { POAPTokenGrid } from '@/components/wallet/poap-token-grid';
 import { Container } from '@/components/ui/container';
@@ -19,7 +19,11 @@ export default function WalletPage() {
 
   // Load claimed POAPs and blockchain tokens when the wallet is authenticated
   const fetchData = async () => {
-    if (!isAuthenticated || !walletAddress) return;
+    if (!isAuthenticated || !walletAddress) {
+      setError('Please authenticate your wallet to view your POAPs');
+      setLoading(false);
+      return;
+    }
 
     setLoading(true);
     setError(null);
@@ -87,9 +91,26 @@ export default function WalletPage() {
             setError('Only compressed Token2022 POAP tokens are displayed.');
           }
         } else {
-          const errorData = await tokensResponse.json();
-          console.error('Failed to load wallet tokens:', errorData);
-          setError(errorData.message || 'Failed to load POAP tokens from your wallet');
+          try {
+            const errorData = await tokensResponse.json();
+            console.error('Failed to load wallet tokens:', errorData);
+
+            // Check if errorData is empty or doesn't have a message
+            if (!errorData || Object.keys(errorData).length === 0 || !errorData.message) {
+              setError(`Failed to load POAP tokens (HTTP ${tokensResponse.status})`);
+            } else if (tokensResponse.status === 401) {
+              setError('Authentication required. Please reconnect your wallet.');
+            } else {
+              setError(errorData.message);
+            }
+          } catch (jsonError) {
+            console.error('Failed to load wallet tokens. Status:', tokensResponse.status);
+            if (tokensResponse.status === 401) {
+              setError('Authentication required. Please reconnect your wallet.');
+            } else {
+              setError(`Failed to load POAP tokens (HTTP ${tokensResponse.status})`);
+            }
+          }
         }
       } catch (err) {
         console.error('Error fetching blockchain tokens:', err);
@@ -119,19 +140,23 @@ export default function WalletPage() {
     fetchData();
   };
 
-  if (!isConnected) {
+  if (!isConnected || !isAuthenticated) {
     return (
       <Container>
         <div className="py-12">
           <div className="max-w-md mx-auto">
             <Card>
               <CardHeader>
-                <CardTitle className="text-center">Connect Your Wallet</CardTitle>
+                <CardTitle className="text-center">
+                  {isConnected ? 'Authenticate Your Wallet' : 'Connect Your Wallet'}
+                </CardTitle>
               </CardHeader>
               <CardContent className="flex flex-col items-center">
                 <Wallet className="h-16 w-16 text-blue-500 mb-4" />
                 <p className="text-center mb-6 text-neutral-600">
-                  Connect your wallet to view your claimed POAPs
+                  {isConnected
+                    ? 'Please authenticate your wallet to view your POAPs'
+                    : 'Connect your wallet to view your claimed POAPs'}
                 </p>
                 <ConnectWallet
                   variant="default"
@@ -155,7 +180,7 @@ export default function WalletPage() {
           subtitle={
             <div className="flex items-center">
               <Wallet className="h-5 w-5 mr-2 text-blue-500" />
-              <span>View and manage your POAP tokens</span>
+              <span>View your POAP tokens</span>
             </div>
           }
           backLink="/"

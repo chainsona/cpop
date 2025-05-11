@@ -13,20 +13,28 @@ export async function getAuthToken(token: string): Promise<{walletAddress: strin
     const decodedToken = Buffer.from(token, 'base64').toString();
     const tokenData = JSON.parse(decodedToken);
     
-    // Check if token has expected format
-    if (!tokenData.message || !tokenData.message.address) {
-      return null;
+    // Extract wallet address based on message format
+    if (tokenData.messageFormat === 'text' && typeof tokenData.message === 'string') {
+      // For text format, extract wallet from the message string
+      const walletMatch = tokenData.message.match(/Wallet: ([a-zA-Z0-9]+)/);
+      if (walletMatch && walletMatch[1]) {
+        return {
+          walletAddress: walletMatch[1]
+        };
+      }
+    } else if (tokenData.message && tokenData.message.address) {
+      // For JSON format messages
+      // Check if token is expired
+      if (tokenData.message.expirationTime && new Date(tokenData.message.expirationTime) < new Date()) {
+        return null;
+      }
+      
+      return {
+        walletAddress: tokenData.message.address
+      };
     }
     
-    // Check if token is expired
-    if (tokenData.message.expirationTime && new Date(tokenData.message.expirationTime) < new Date()) {
-      return null;
-    }
-    
-    // Return wallet address
-    return {
-      walletAddress: tokenData.message.address
-    };
+    return null;
   } catch (error) {
     console.error('Error parsing auth token:', error);
     return null;

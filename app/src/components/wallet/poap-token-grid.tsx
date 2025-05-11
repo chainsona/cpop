@@ -92,11 +92,9 @@ export function POAPTokenGrid({
   return (
     <Tabs defaultValue="all" className="w-full">
       <TabsList className="mb-6">
-        <TabsTrigger value="all">All POAPs ({totalCount})</TabsTrigger>
+        <TabsTrigger value="all">All ({totalCount})</TabsTrigger>
         <TabsTrigger value="wallet">In Wallet ({walletCount})</TabsTrigger>
-        {claimedCount > 0 && (
-          <TabsTrigger value="claimed">Claimed POAPs ({claimedCount})</TabsTrigger>
-        )}
+        {claimedCount > 0 && <TabsTrigger value="claimed">Claimed ({claimedCount})</TabsTrigger>}
       </TabsList>
 
       <TabsContent value="all" className="mt-0">

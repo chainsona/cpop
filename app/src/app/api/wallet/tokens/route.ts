@@ -39,19 +39,30 @@ export async function GET(request: NextRequest) {
         },
       });
 
+      if (!allPoapTokens || allPoapTokens.length === 0) {
+        return NextResponse.json({
+          tokens: [],
+          count: 0,
+          message: 'No POAP tokens found in the database',
+        });
+      }
+
       console.log(`Found ${allPoapTokens.length} POAP tokens in database`);
       const poapMintAddresses = allPoapTokens.map(token => token.mintAddress);
 
       // Fetch compressed Token2022 tokens from blockchain
       const walletTokens = await getTokensForWallet(walletAddress);
+      
+      // Filter out any null tokens from the result
+      const validWalletTokens = walletTokens.filter(token => token !== null);
 
       console.log(
-        `Found ${walletTokens.length} Token2022 tokens in blockchain wallet:`,
-        walletTokens.map(t => ({ mint: t.mint, amount: t.amount }))
+        `Found ${validWalletTokens.length} Token2022 tokens in blockchain wallet:`,
+        validWalletTokens.map(t => ({ mint: t.mint, amount: t.amount }))
       );
 
       // Get the mint addresses from wallet
-      const walletMintAddresses = walletTokens.map(token => token.mint);
+      const walletMintAddresses = validWalletTokens.map(token => token.mint);
 
       // Find the intersection of wallet tokens and POAP tokens
       const matchingMintAddresses = walletMintAddresses.filter(mintAddress =>
@@ -72,7 +83,7 @@ export async function GET(request: NextRequest) {
       // Format the results for the API response
       const poapTokenResults = matchingMintAddresses
         .map(mintAddress => {
-          const walletToken = walletTokens.find(t => t.mint === mintAddress);
+          const walletToken = validWalletTokens.find(t => t.mint === mintAddress);
           const poapToken = allPoapTokens.find(p => p.mintAddress === mintAddress);
 
           if (!walletToken || !poapToken || !poapToken.poap) {
@@ -103,12 +114,23 @@ export async function GET(request: NextRequest) {
     } catch (error) {
       console.error('Error querying database or blockchain:', error);
       return NextResponse.json(
-        { message: 'Failed to fetch POAP tokens', error: String(error) },
+        { 
+          message: 'Failed to fetch POAP tokens', 
+          error: String(error),
+          details: error instanceof Error ? error.stack : undefined 
+        },
         { status: 500 }
       );
     }
   } catch (error) {
     console.error('Error fetching wallet tokens:', error);
-    return NextResponse.json({ message: 'Internal server error' }, { status: 500 });
+    return NextResponse.json(
+      { 
+        message: 'Internal server error',
+        error: String(error),
+        details: error instanceof Error ? error.stack : undefined
+      }, 
+      { status: 500 }
+    );
   }
 }
