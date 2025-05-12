@@ -28,8 +28,30 @@ interface Params {
  */
 export async function POST(request: NextRequest, { params }: { params: Promise<Params> }) {
   try {
+    // Get poapId from params
+    const { id: poapId } = await params;
+    
+    // Debugging: Log auth headers
+    const authHeader = request.headers.get('authorization');
+    const cookie = request.headers.get('cookie');
+    
+    console.log('CLAIM API DEBUG:', {
+      poapId,
+      hasAuthHeader: !!authHeader,
+      authHeaderPrefix: authHeader ? authHeader.substring(0, 20) + '...' : null,
+      hasCookie: !!cookie,
+      cookieContainsAuth: cookie?.includes('solana_auth_token'),
+    });
+
     // Authenticate the request
     const auth = await verifyAuth(request);
+
+    // Log auth result
+    console.log('Auth verification result:', { 
+      isAuthenticated: auth.isAuthenticated,
+      hasWalletAddress: !!auth.walletAddress,
+      walletAddressPrefix: auth.walletAddress ? auth.walletAddress.substring(0, 6) + '...' : null
+    });
 
     if (!auth.isAuthenticated || !auth.walletAddress) {
       return NextResponse.json(
@@ -42,7 +64,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<P
     }
 
     const walletAddress = auth.walletAddress;
-    const { id: poapId } = await params;
 
     // Parse request body
     const body = await request.json();

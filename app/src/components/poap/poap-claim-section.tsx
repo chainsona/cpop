@@ -270,7 +270,6 @@ export function POAPClaimSection({ poapId, title }: POAPClaimSectionProps) {
       <Card className="border border-neutral-200 shadow-sm">
         <CardHeader>
           <CardTitle>Claim your POAP</CardTitle>
-          <CardDescription>Authenticate with your wallet to claim {title}</CardDescription>
         </CardHeader>
         <CardContent>
           <Alert className="bg-blue-50 border-blue-200 mb-4">

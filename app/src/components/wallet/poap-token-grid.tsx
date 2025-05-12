@@ -26,16 +26,34 @@ export function POAPTokenGrid({
   // We only want to show POAP tokens now
   const poapTokens = tokens.filter(token => token.source === 'database');
 
-  // Add claimed tokens that aren't already in the wallet tokens list
-  const allTokens = [...poapTokens];
+  // First deduplicate the tokens array itself
+  const uniqueTokens = poapTokens.reduce((acc: POAPTokenProps[], current) => {
+    const isDuplicate = acc.some(item => 
+      (item.id === current.id) || 
+      (item.mintAddress && current.mintAddress && item.mintAddress === current.mintAddress) ||
+      (item.title === current.title && item.imageUrl === current.imageUrl)
+    );
+    if (!isDuplicate) {
+      acc.push(current);
+    }
+    return acc;
+  }, []);
+
+  // Then deduplicate claimed tokens against the unique tokens list
+  const allTokens = [...uniqueTokens];
   claimedTokens.forEach(claimed => {
-    if (!allTokens.some(token => token.id === claimed.id)) {
+    const isDuplicate = allTokens.some(token => 
+      token.id === claimed.id || 
+      (token.mintAddress && claimed.mintAddress && token.mintAddress === claimed.mintAddress) ||
+      (token.title === claimed.title && token.imageUrl === claimed.imageUrl)
+    );
+    
+    if (!isDuplicate) {
       allTokens.push(claimed);
     }
   });
 
-  const walletCount = poapTokens.length;
-  const claimedCount = claimedTokens.length;
+  const walletCount = uniqueTokens.length;
   const totalCount = allTokens.length;
 
   if (loading) {
@@ -94,7 +112,6 @@ export function POAPTokenGrid({
       <TabsList className="mb-6">
         <TabsTrigger value="all">All ({totalCount})</TabsTrigger>
         <TabsTrigger value="wallet">In Wallet ({walletCount})</TabsTrigger>
-        {claimedCount > 0 && <TabsTrigger value="claimed">Claimed ({claimedCount})</TabsTrigger>}
       </TabsList>
 
       <TabsContent value="all" className="mt-0">
@@ -130,16 +147,6 @@ export function POAPTokenGrid({
           )}
         </div>
       </TabsContent>
-
-      {claimedCount > 0 && (
-        <TabsContent value="claimed" className="mt-0">
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 auto-rows-fr">
-            {claimedTokens.map(token => (
-              <POAPTokenCard key={`claimed-${token.id}`} {...token} />
-            ))}
-          </div>
-        </TabsContent>
-      )}
     </Tabs>
   );
 }

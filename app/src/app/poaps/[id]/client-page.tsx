@@ -122,7 +122,7 @@ interface POAPDetailClientPageProps {
 }
 
 export default function POAPDetailClientPage({ id }: POAPDetailClientPageProps) {
-  const { isAuthenticated, walletAddress, authenticate } = useWalletContext();
+  const { isAuthenticated, walletAddress, authenticate, connect, isConnected } = useWalletContext();
 
   const { setPageTitle } = usePageTitle();
   const [poap, setPoap] = useState<POAP | null>(null);
@@ -558,9 +558,6 @@ export default function POAPDetailClientPage({ id }: POAPDetailClientPageProps) 
                 <Card className="border border-neutral-200 shadow-sm">
                   <CardHeader>
                     <CardTitle>Claim this POAP</CardTitle>
-                    <CardDescription>
-                      Authenticate with your wallet to claim {poap.title}
-                    </CardDescription>
                   </CardHeader>
                   <CardContent>
                     <Alert className="bg-blue-50 border-blue-200 mb-4">
@@ -570,7 +567,15 @@ export default function POAPDetailClientPage({ id }: POAPDetailClientPageProps) 
                         You need to connect and authenticate your wallet before claiming this POAP.
                       </AlertDescription>
                     </Alert>
-                    <Button onClick={authenticate} className="w-full">
+                    <Button
+                      onClick={async () => {
+                        if (!isConnected) {
+                          await connect();
+                        }
+                        await authenticate();
+                      }}
+                      className="w-full"
+                    >
                       Authenticate to Claim
                     </Button>
                   </CardContent>

@@ -116,6 +116,14 @@ export async function verifyAuth(request: Request) {
     const cookies = request.headers.get('Cookie');
     let cookieToken = null;
     
+    // Debug log inputs
+    console.log('verifyAuth inputs:', {
+      hasAuthHeader: !!authHeader,
+      authHeaderPrefix: authHeader ? authHeader.substring(0, 15) + '...' : null,
+      hasCookies: !!cookies,
+      cookiesContainsAuthToken: cookies?.includes('solana_auth_token'),
+    });
+    
     if (cookies) {
       const tokenCookie = cookies.split(';').find(c => c.trim().startsWith('solana_auth_token='));
       if (tokenCookie) {
@@ -132,8 +140,15 @@ export async function verifyAuth(request: Request) {
     }
     
     if (!token) {
+      console.log('verifyAuth: No token found');
       return { isAuthenticated: false, walletAddress: null };
     }
+    
+    // Debug log token info
+    console.log('verifyAuth token info:', {
+      tokenLength: token.length,
+      tokenPrefix: token.substring(0, 15) + '...',
+    });
     
     // Decode and verify the token
     try {
@@ -150,11 +165,28 @@ export async function verifyAuth(request: Request) {
         
         // Check if token has expired
         if (expirationTime > new Date()) {
+          // Debug log success
+          console.log('verifyAuth success:', {
+            walletAddress: decodedToken.message.address.substring(0, 6) + '...',
+            expiresAt: expirationTime,
+          });
+          
           return { 
             isAuthenticated: true, 
             walletAddress: decodedToken.message.address 
           };
         }
+        
+        console.log('verifyAuth: Token expired', {
+          expirationTime,
+          now: new Date(),
+        });
+      } else {
+        console.log('verifyAuth: Invalid token structure', {
+          hasMessage: !!decodedToken.message,
+          hasAddress: decodedToken.message?.address ? true : false,
+          hasExpiration: decodedToken.message?.expirationTime ? true : false,
+        });
       }
     } catch (decodeError) {
       console.error('Error decoding auth token:', decodeError);
