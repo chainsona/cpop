@@ -1,0 +1,81 @@
+# Location-Based POP Claims
+
+Location-based claims allow you to distribute POP tokens to attendees who are physically present at a specific location. This feature is useful for events, conferences, meetups, and other gatherings where you want to verify attendee presence.
+
+## How It Works
+
+1. **Setup**: As an event organizer, you set up a location-based distribution method by providing:
+   - A specific location (address or coordinates)
+   - A claim radius (how close users need to be to claim)
+   - Optional claim limits and availability dates
+
+2. **Verification**: When attendees try to claim, the system:
+   - Gets their current GPS coordinates (with permission)
+   - Compares their location to the event location
+   - Verifies they are within the specified radius
+   - Allows claiming only if all checks pass
+
+3. **Security**: The system includes safeguards:
+   - Coordinates must be accurate within 10 seconds (to prevent location spoofing)
+   - Each wallet can only claim once
+   - Optional maximum claim limits
+   - Time-based availability windows
+
+## Setting Up Location-Based Claims
+
+1. Navigate to your POP dashboard
+2. Click "Add Distribution Method"
+3. Select "Location-Based"
+4. Search for the event location or enter coordinates directly
+5. Set the claim radius (in meters)
+6. Configure additional options:
+   - Maximum number of claims (or unlimited)
+   - Start and end dates
+7. Review and create
+
+## Technical Details
+
+The location verification uses the Haversine formula to calculate the distance between the user's location and the event location, accounting for the Earth's curvature. Coordinates are stored as floating-point numbers in the database.
+
+```typescript
+// Simplified example of the distance calculation
+function calculateDistance(lat1, lon1, lat2, lon2) {
+  const R = 6371e3; // Earth's radius in meters
+  const φ1 = (lat1 * Math.PI) / 180;
+  const φ2 = (lat2 * Math.PI) / 180;
+  const Δφ = ((lat2 - lat1) * Math.PI) / 180;
+  const Δλ = ((lon2 - lon1) * Math.PI) / 180;
+
+  const a =
+    Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+    Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+  return R * c; // distance in meters
+}
+```
+
+## User Experience
+
+Attendees will:
+1. Navigate to your POP claim page
+2. Click "Get My Location" (browser will request permission)
+3. Once location is captured, click "Verify Location & Claim"
+4. If within the radius, the POP will be automatically claimed
+5. If outside the radius, they'll receive a notice showing how far they are from the event
+
+## Best Practices
+
+- **Set an appropriate radius**: 100-200 meters works well for most venues
+- **Test beforehand**: Verify the location accuracy at your venue
+- **Consider connectivity**: Ensure the venue has adequate internet access
+- **Inform attendees**: Let them know they'll need to enable location services
+
+## Troubleshooting
+
+If attendees have trouble claiming:
+- Ensure they have location services enabled on their device
+- Ask them to refresh and try again
+- Check if they're using a browser that supports geolocation
+- Verify they're connected to the internet
+- Consider temporarily increasing the radius if needed 

@@ -1,0 +1,239 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String   @id @default(cuid())
+  name          String?
+  email         String?  @unique
+  walletAddress String?  @unique
+  image         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  pops         Pop[]
+
+  @@index([walletAddress])
+}
+
+model Pop {
+  id                  String               @id @default(cuid())
+  title               String
+  description         String
+  imageUrl            String
+  website             String?
+  startDate           DateTime
+  endDate             DateTime
+  status              PopStatus           @default(Draft)
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  attendees           Int?
+  creatorId           String?
+  attributes          Attributes?
+  distributionMethods DistributionMethod[]
+  claims              POPClaim[]
+  creator             User?                @relation(fields: [creatorId], references: [id])
+  tokens              PopToken[]
+  settings            Settings?
+
+  @@index([creatorId])
+  @@index([status])
+}
+
+model DistributionMethod {
+  id            String           @id @default(cuid())
+  popId        String
+  type          DistributionType
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  disabled      Boolean          @default(false)
+  deleted       Boolean          @default(false)
+  airdrop       Airdrop?
+  claimLinks    ClaimLink[]
+  pop          Pop             @relation(fields: [popId], references: [id], onDelete: Cascade)
+  locationBased LocationBased?
+  claims        POPClaim[]
+  secretWord    SecretWord?
+
+  @@index([popId])
+  @@index([type])
+  @@index([disabled])
+  @@index([deleted])
+}
+
+model ClaimLink {
+  id                   String             @id @default(cuid())
+  distributionMethodId String
+  token                String             @unique
+  claimed              Boolean            @default(false)
+  claimedAt            DateTime?
+  expiresAt            DateTime?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+  claimedByWallet      String?
+  transactionSignature String?
+  distributionMethod   DistributionMethod @relation(fields: [distributionMethodId], references: [id], onDelete: Cascade)
+
+  @@index([distributionMethodId])
+  @@index([claimed])
+  @@index([claimedAt])
+}
+
+model SecretWord {
+  id                   String             @id @default(cuid())
+  distributionMethodId String             @unique
+  word                 String
+  maxClaims            Int?
+  claimCount           Int                @default(0)
+  startDate            DateTime?
+  endDate              DateTime?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+  distributionMethod   DistributionMethod @relation(fields: [distributionMethodId], references: [id], onDelete: Cascade)
+}
+
+model LocationBased {
+  id                   String             @id @default(cuid())
+  distributionMethodId String             @unique
+  city                 String
+  country              String?
+  latitude             Float
+  longitude            Float
+  radius               Int                @default(500)
+  maxClaims            Int?
+  claimCount           Int                @default(0)
+  startDate            DateTime?
+  endDate              DateTime?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+  distributionMethod   DistributionMethod @relation(fields: [distributionMethodId], references: [id], onDelete: Cascade)
+}
+
+model Airdrop {
+  id                   String             @id @default(cuid())
+  distributionMethodId String             @unique
+  addresses            String[]
+  maxClaims            Int?
+  claimCount           Int                @default(0)
+  startDate            DateTime?
+  endDate              DateTime?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+  distributionMethod   DistributionMethod @relation(fields: [distributionMethodId], references: [id], onDelete: Cascade)
+}
+
+model Attributes {
+  id           String        @id @default(cuid())
+  popId       String        @unique
+  eventType    EventType     @default(Physical)
+  platform     String?
+  city         String?
+  country      String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  platformUrl  String?
+  artists      Artist[]
+  pop         Pop          @relation(fields: [popId], references: [id], onDelete: Cascade)
+  organization Organization?
+
+  @@index([popId])
+}
+
+model Artist {
+  id           String     @id @default(cuid())
+  attributesId String
+  name         String
+  url          String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  attributes   Attributes @relation(fields: [attributesId], references: [id], onDelete: Cascade)
+
+  @@index([attributesId])
+}
+
+model Organization {
+  id           String     @id @default(cuid())
+  attributesId String     @unique
+  name         String
+  url          String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  attributes   Attributes @relation(fields: [attributesId], references: [id], onDelete: Cascade)
+}
+
+model Settings {
+  id               String     @id @default(cuid())
+  popId           String     @unique
+  defaultStartDate DateTime?
+  defaultEndDate   DateTime?
+  includeTime      Boolean    @default(false)
+  visibility       Visibility @default(Public)
+  allowSearch      Boolean    @default(true)
+  notifyOnClaim    Boolean    @default(true)
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+  pop             Pop       @relation(fields: [popId], references: [id], onDelete: Cascade)
+
+  @@index([popId])
+}
+
+model PopToken {
+  id                String    @id @default(uuid())
+  popId            String
+  mintAddress       String    @unique
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  metadataUri       String?
+  metadataUpdatedAt DateTime?
+  pop              Pop      @relation(fields: [popId], references: [id], onDelete: Cascade)
+
+  @@index([popId])
+}
+
+model POPClaim {
+  id                   String             @id @default(cuid())
+  popId               String
+  walletAddress        String
+  distributionMethodId String
+  transactionSignature String?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+  distributionMethod   DistributionMethod @relation(fields: [distributionMethodId], references: [id], onDelete: Cascade)
+  pop                 Pop               @relation(fields: [popId], references: [id], onDelete: Cascade)
+
+  @@unique([popId, walletAddress])
+  @@index([popId])
+  @@index([walletAddress])
+  @@index([distributionMethodId])
+}
+
+enum PopStatus {
+  Draft
+  Published
+  Distributed
+  Unclaimable
+  Disabled
+}
+
+enum DistributionType {
+  ClaimLinks
+  SecretWord
+  LocationBased
+  Airdrop
+}
+
+enum EventType {
+  Physical
+  Online
+}
+
+enum Visibility {
+  Public
+  Unlisted
+  Private
+}
