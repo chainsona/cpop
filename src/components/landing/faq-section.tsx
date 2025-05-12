@@ -39,27 +39,31 @@ const faqs = [
 
 export function FAQSection() {
   return (
-    <section id="faq" className="py-20">
+    <section id="faq" className="py-12 sm:py-16 md:py-20">
       <Container>
-        <div className="text-center mb-16">
-          <h2 className="text-3xl sm:text-4xl font-bold mb-4">Frequently Asked Questions</h2>
-          <p className="text-neutral-600 dark:text-neutral-300 max-w-2xl mx-auto">
+        <div className="text-center mb-8 sm:mb-12 md:mb-16">
+          <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-3 sm:mb-4">
+            Frequently Asked Questions
+          </h2>
+          <p className="text-sm sm:text-base text-neutral-600 dark:text-neutral-300 max-w-2xl mx-auto px-4">
             Everything you need to know about POPs and our platform.
           </p>
         </div>
 
-        <div className="max-w-3xl mx-auto">
-          <Accordion type="single" collapsible className="space-y-4">
+        <div className="max-w-3xl mx-auto px-4 sm:px-0">
+          <Accordion type="single" collapsible className="space-y-3 sm:space-y-4">
             {faqs.map((faq, index) => (
               <AccordionItem
                 key={index}
                 value={`item-${index}`}
                 className="border border-neutral-200 dark:border-neutral-800 rounded-lg overflow-hidden"
               >
-                <AccordionTrigger className="px-6 py-4 hover:no-underline">
+                <AccordionTrigger className="px-4 sm:px-6 py-3 sm:py-4 hover:no-underline text-sm sm:text-base">
                   {faq.question}
                 </AccordionTrigger>
-                <AccordionContent className="px-6 pb-4">{faq.answer}</AccordionContent>
+                <AccordionContent className="px-4 sm:px-6 pb-3 sm:pb-4 text-sm">
+                  {faq.answer}
+                </AccordionContent>
               </AccordionItem>
             ))}
           </Accordion>
