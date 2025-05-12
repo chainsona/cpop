@@ -8,7 +8,6 @@ import { PoapItem } from '@/types/poap';
 import { fetchWithAuth } from '@/lib/api-client';
 import { Loader2, Plus, Award } from 'lucide-react';
 import { useWalletContext } from '@/contexts/wallet-context';
-import { CreateExamplePOAP } from '@/components/poap/create-example-poap';
 import { Container } from '@/components/ui/container';
 import { PageHeader } from '@/components/ui/page-header';
 import { useRouter } from 'next/navigation';
@@ -42,17 +41,17 @@ export default function POAPListPage() {
     // Check if there's a token in localStorage
     const token =
       typeof localStorage !== 'undefined' ? localStorage.getItem('solana_auth_token') : null;
-    
+
     const isAuth = !!token;
     setIsAuthenticated(isAuth);
-    
+
     // If not authenticated and not in loading state, redirect to auth page
     if (!isAuth && typeof window !== 'undefined') {
       // Short delay to allow other hooks to initialize
       const redirectTimer = setTimeout(() => {
         router.push('/auth?returnUrl=/poaps');
       }, 100);
-      
+
       return () => clearTimeout(redirectTimer);
     }
 
@@ -93,8 +92,9 @@ export default function POAPListPage() {
       setError(null);
 
       // Check auth token before making the request
-      const token = typeof localStorage !== 'undefined' ? localStorage.getItem('solana_auth_token') : null;
-      
+      const token =
+        typeof localStorage !== 'undefined' ? localStorage.getItem('solana_auth_token') : null;
+
       if (!token && isAuthenticatedRef.current) {
         // Token is missing but we thought we were authenticated
         console.log('Auth token missing, updating auth state...');
@@ -102,12 +102,12 @@ export default function POAPListPage() {
         setPoaps([]);
         setIsLoading(false);
         setError('Authentication token missing. Please authenticate with your wallet.');
-        
+
         // Redirect to auth page
         router.push('/auth?returnUrl=/poaps');
         return;
       }
-      
+
       if (!token) {
         // No token and we know we're not authenticated - redirect
         router.push('/auth?returnUrl=/poaps');
@@ -115,12 +115,12 @@ export default function POAPListPage() {
       }
 
       // Using the fetchWithAuth utility to include authentication headers
-      console.log('Fetching POAPs with auth status:', { 
-        isConnected: isConnectedRef.current, 
+      console.log('Fetching POAPs with auth status:', {
+        isConnected: isConnectedRef.current,
         isAuthenticated: isAuthenticatedRef.current,
-        hasToken: !!token
+        hasToken: !!token,
       });
-      
+
       const response = await fetchWithAuth('/api/poaps');
 
       if (!response.ok) {
@@ -159,7 +159,7 @@ export default function POAPListPage() {
           }
 
           setIsAuthenticated(false);
-          
+
           // Redirect to auth page after a short delay
           setTimeout(() => {
             router.push('/auth?returnUrl=/poaps');
@@ -251,11 +251,7 @@ export default function POAPListPage() {
               variant: 'default',
             },
           ]}
-        >
-          <div className="mt-2">
-            <CreateExamplePOAP />
-          </div>
-        </PageHeader>
+        />
 
         {/* Display error message if any */}
         {error && (
