@@ -88,6 +88,13 @@ export function TestimonialsSection() {
           </div>
         </div>
       </Container>
+
+      <div className="flex justify-center">
+        <p className="text-sm italic text-neutral-500 dark:text-neutral-400 mt-2 text-xs">
+          (Note: These testimonials and metrics are placeholders and do not represent actual
+          endorsements or data)
+        </p>
+      </div>
     </section>
   );
 }
