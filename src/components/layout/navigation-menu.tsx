@@ -82,9 +82,9 @@ export function NavigationMenu({
         className="h-[100dvh] flex flex-col sm:max-w-2xl lg:max-w-4xl xl:max-w-6xl sm:max-h-[90vh] overflow-hidden p-0"
         onKeyDown={handleKeyDown}
       >
-        <DialogHeader className="space-y-3 mb-4 p-6 pb-0">
+        <DialogHeader className="space-y-3 mb-2 p-4 sm:p-6 sm:pb-0">
           <div className="flex justify-between items-center">
-            <DialogTitle className="text-2xl font-bold">
+            <DialogTitle className="text-xl sm:text-2xl font-bold">
               {currentPopTitle || 'Navigation'}
             </DialogTitle>
 
@@ -94,7 +94,7 @@ export function NavigationMenu({
         </DialogHeader>
 
         {/* Desktop-optimized layout */}
-        <div className="flex flex-col space-y-6 md:space-y-0 md:flex-row md:gap-6 overflow-y-auto flex-1 p-6 pt-2">
+        <div className="flex flex-col space-y-4 md:space-y-0 md:flex-row md:gap-6 overflow-y-auto flex-1 p-4 sm:p-6 sm:pt-2">
           {/* Left sidebar - Navigation for desktop */}
           <div className="md:w-60 lg:w-72 space-y-4 order-2 md:order-1">
             {/* User profile card */}

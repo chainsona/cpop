@@ -21,7 +21,7 @@ export function POPCard({ pop, onClick, type = 'full' }: POPCardProps) {
   if (type === 'compact') {
     return (
       <button
-        className="flex-shrink-0 w-64 flex items-center gap-4 p-3 rounded-lg hover:bg-neutral-50 hover:shadow-sm transition-all text-left border border-neutral-100 group"
+        className="flex-shrink-0 w-full min-w-[220px] max-w-[280px] flex items-center gap-3 p-3 rounded-lg hover:bg-neutral-50 hover:shadow-sm transition-all text-left border border-neutral-100 group"
         onClick={() => onClick(pop)}
       >
         <div className="h-16 w-16 rounded-lg bg-neutral-100 overflow-hidden flex-shrink-0 shadow-sm group-hover:shadow transition-shadow">
@@ -51,10 +51,10 @@ export function POPCard({ pop, onClick, type = 'full' }: POPCardProps) {
 
   return (
     <button
-      className="flex items-center gap-4 p-4 rounded-lg hover:bg-neutral-50 hover:shadow-sm transition-all w-full text-left border border-neutral-100 group"
+      className="flex items-center gap-3 p-3 rounded-lg hover:bg-neutral-50 hover:shadow-sm transition-all w-full text-left border border-neutral-100 group h-full"
       onClick={() => onClick(pop)}
     >
-      <div className="h-20 w-20 rounded-lg bg-neutral-100 overflow-hidden flex-shrink-0 shadow-sm group-hover:shadow group-hover:ring-1 group-hover:ring-blue-200 transition-all">
+      <div className="h-16 w-16 sm:h-20 sm:w-20 rounded-lg bg-neutral-100 overflow-hidden flex-shrink-0 shadow-sm group-hover:shadow group-hover:ring-1 group-hover:ring-blue-200 transition-all">
         <img
           src={pop.imageUrl}
           alt={pop.title}
@@ -65,11 +65,11 @@ export function POPCard({ pop, onClick, type = 'full' }: POPCardProps) {
         />
       </div>
       <div className="flex-1 min-w-0">
-        <div className="font-medium text-lg truncate group-hover:text-blue-600 transition-colors">
+        <div className="font-medium text-base sm:text-lg truncate group-hover:text-blue-600 transition-colors">
           {pop.title}
         </div>
-        <div className="flex items-center gap-2 mt-2">
-          <span className={`text-xs px-2 py-0.5 rounded-full ${statusColors[pop.status]}`}>
+        <div className="flex items-center gap-2 mt-1 sm:mt-2">
+          <span className={`text-xs px-1.5 sm:px-2 py-0.5 rounded-full ${statusColors[pop.status]}`}>
             {pop.status}
           </span>
         </div>

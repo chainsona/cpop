@@ -75,7 +75,7 @@ export function POPResults({
           <p className="text-neutral-500">No POPs found</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
           {filteredPops.slice(0, 6).map(pop => (
             <POPCard key={pop.id} pop={pop} onClick={onPopClick} />
           ))}
@@ -86,7 +86,7 @@ export function POPResults({
       {!searchQuery && !isLoading && !error && pops.length > 6 && (
         <Link
           href="/pops"
-          className="hidden md:flex items-center justify-center gap-1 text-base text-blue-600 hover:text-blue-800 mt-4 bg-blue-50 p-3 rounded-lg hover:bg-blue-100 transition-colors"
+          className="hidden sm:flex items-center justify-center gap-1 text-base text-blue-600 hover:text-blue-800 mt-4 bg-blue-50 p-3 rounded-lg hover:bg-blue-100 transition-colors"
           onClick={onClose}
         >
           View all POPs
@@ -95,4 +95,4 @@ export function POPResults({
       )}
     </div>
   );
-} 
+}

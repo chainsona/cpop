@@ -29,9 +29,11 @@ export function RecentPOPs({ recentPops, onPopClick }: RecentPOPsProps) {
           </Button>
         )}
       </div>
-      <div className="flex overflow-x-auto pb-2 space-x-3 hide-scrollbar">
+      <div className="flex overflow-x-auto pb-2 gap-3 -mx-2 px-2 snap-x hide-scrollbar">
         {recentPops.map(pop => (
-          <POPCard key={pop.id} pop={pop} onClick={onPopClick} type="compact" />
+          <div key={pop.id} className="snap-start flex-shrink-0">
+            <POPCard pop={pop} onClick={onPopClick} type="compact" />
+          </div>
         ))}
       </div>
     </div>
