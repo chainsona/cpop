@@ -41,7 +41,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<Pa
     const { id: popId } = await params;
 
     // Directly query the database for claim status
-    const claimRecord = await prisma.popClaim.findUnique({
+    const claimRecord = await prisma.pOPClaim.findUnique({
       where: {
         popId_walletAddress: {
           popId,

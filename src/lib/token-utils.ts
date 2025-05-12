@@ -219,7 +219,7 @@ export async function getPOPsByMints(mintAddresses: string[]) {
 
     // Then get the claims associated with these POPs
     const popIds = popTokens.map(token => token.popId);
-    const claims = await prisma.popClaim.findMany({
+    const claims = await prisma.pOPClaim.findMany({
       where: {
         popId: {
           in: popIds,

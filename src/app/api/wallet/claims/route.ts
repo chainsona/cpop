@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
 
     try {
       // Find claims for this wallet address
-      const claims = await prisma.popClaim.findMany({
+      const claims = await prisma.pOPClaim.findMany({
         where: {
           walletAddress: walletAddress,
         },

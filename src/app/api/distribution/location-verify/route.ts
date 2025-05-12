@@ -114,7 +114,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if user already claimed this POP
-    const existingClaim = await prisma.popClaim.findUnique({
+    const existingClaim = await prisma.pOPClaim.findUnique({
       where: {
         popId_walletAddress: {
           popId: distributionMethod.popId,

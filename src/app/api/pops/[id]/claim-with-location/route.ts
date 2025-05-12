@@ -180,7 +180,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<P
     }
 
     // Check if user already claimed this POP
-    const existingClaim = await prisma.popClaim.findUnique({
+    const existingClaim = await prisma.pOPClaim.findUnique({
       where: {
         popId_walletAddress: {
           popId,
@@ -256,7 +256,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<P
     });
 
     // Create the claim record with transaction signature
-    const claim = await prisma.popClaim.create({
+    const claim = await prisma.pOPClaim.create({
       data: {
         popId,
         walletAddress,

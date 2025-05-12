@@ -57,7 +57,7 @@ export async function POST(
     const walletAddress = auth.walletAddress;
 
     // Check if user already claimed this POP
-    const existingClaim = await prisma.popClaim.findFirst({
+    const existingClaim = await prisma.pOPClaim.findFirst({
       where: {
         popId,
         walletAddress,
@@ -199,10 +199,10 @@ export async function POST(
 
     // Generate a unique claim ID
     const claimId = `claim-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-    
+
     // Record the claim in the database
     try {
-      await prisma.popClaim.create({
+      await prisma.pOPClaim.create({
         data: {
           id: claimId,
           popId: popId,
