@@ -7,71 +7,39 @@ export async function GET(request: NextRequest) {
     // First check if any POAPs exist at all
     const totalPoaps = await prisma.poap.count();
     console.log(`Total POAPs in database: ${totalPoaps}`);
-    
-    // In development, if there are no POAPs, create a test POAP
-    if (process.env.NODE_ENV === 'development' && totalPoaps === 0) {
-      console.log('Creating a test POAP for development');
-      
-      try {
-        const testPoap = await prisma.poap.create({
-          data: {
-            title: 'Test Explorer POAP',
-            description: 'This is a test POAP for the Explorer',
-            imageUrl: 'https://placehold.co/600x400?text=Test+POAP',
-            startDate: new Date(),
-            endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days from now
-            status: 'Published',
-            settings: {
-              create: {
-                visibility: 'Public',
-                allowSearch: true,
-                notifyOnClaim: false
-              }
-            }
-          },
-          include: {
-            settings: true
-          }
-        });
-        
-        console.log('Created test POAP:', testPoap.id);
-      } catch (createError) {
-        console.error('Failed to create test POAP:', createError);
-      }
-    }
-    
+
     // Check POAPs with explicit public visibility
     const publicPoaps = await prisma.poap.count({
       where: {
         settings: {
           is: {
             visibility: 'Public',
-          }
+          },
         },
-      }
+      },
     });
     console.log(`POAPs with public visibility: ${publicPoaps}`);
-    
+
     // Check published POAPs
     const publishedPoaps = await prisma.poap.count({
       where: {
         status: 'Published',
-      }
+      },
     });
     console.log(`Published POAPs: ${publishedPoaps}`);
-    
+
     // Check POAPs with no settings
     const noSettingsPoaps = await prisma.poap.count({
       where: {
         settings: null,
-      }
+      },
     });
     console.log(`POAPs with no settings: ${noSettingsPoaps}`);
 
     // For development, get all POAPs to debug
     const allPoapIds = await prisma.poap.findMany({
       select: { id: true, status: true },
-      take: 10
+      take: 10,
     });
     console.log('Sample POAPs:', allPoapIds);
 
@@ -83,7 +51,7 @@ export async function GET(request: NextRequest) {
             settings: {
               is: {
                 visibility: 'Public',
-              }
+              },
             },
           },
           {
@@ -92,7 +60,7 @@ export async function GET(request: NextRequest) {
           // Temporarily include all published POAPs for debugging
           {
             status: 'Published',
-          }
+          },
         ],
       },
       orderBy: { createdAt: 'desc' },
@@ -103,9 +71,9 @@ export async function GET(request: NextRequest) {
             id: true,
             name: true,
             walletAddress: true,
-          }
-        }
-      }
+          },
+        },
+      },
     });
 
     console.log(`Found ${poaps.length} POAPs with relaxed criteria`);
@@ -114,13 +82,13 @@ export async function GET(request: NextRequest) {
         id: poaps[0].id,
         title: poaps[0].title,
         status: poaps[0].status,
-        visibility: poaps[0].settings?.visibility || 'No settings'
+        visibility: poaps[0].settings?.visibility || 'No settings',
       });
     }
-    
+
     return NextResponse.json({ poaps });
   } catch (error) {
     console.error('Error fetching public POAPs:', error);
     return NextResponse.json({ error: 'Failed to fetch public POAPs' }, { status: 500 });
   }
-} 
+}

@@ -17,6 +17,13 @@ export const GET = (req: NextRequest, ctx: { params: Promise<Params> }) =>
       const { id: poapId } = await ctx.params;
       console.log(`Checking token status for POAP ${poapId}`);
 
+      // Add cache control headers to prevent caching
+      const headers = {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+      };
+
       // First check if the POAP exists
       const poap = await prisma.poap.findUnique({
         where: { id: poapId },
@@ -25,7 +32,7 @@ export const GET = (req: NextRequest, ctx: { params: Promise<Params> }) =>
 
       if (!poap) {
         console.warn(`POAP ${poapId} not found when checking token status`);
-        return NextResponse.json({ error: 'POAP not found', minted: false }, { status: 404 });
+        return NextResponse.json({ error: 'POAP not found', minted: false }, { status: 404, headers });
       }
 
       // Simple check to see if a token exists for this POAP
@@ -44,12 +51,25 @@ export const GET = (req: NextRequest, ctx: { params: Promise<Params> }) =>
         minted: !!token,
         mintAddress: token?.mintAddress || null,
         mintedAt: token?.createdAt || null,
-      });
+        timestamp: Date.now(), // Add a timestamp to help with debugging
+      }, { headers });
     } catch (error) {
       console.error('Error checking token status:', error);
       return NextResponse.json(
-        { error: 'Failed to check token status', minted: false },
-        { status: 500 }
+        { 
+          error: 'Failed to check token status', 
+          minted: false,
+          timestamp: Date.now(), 
+          errorDetails: error instanceof Error ? error.message : 'Unknown error' 
+        },
+        { 
+          status: 500,
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0'
+          }
+        }
       );
     }
   });

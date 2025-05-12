@@ -97,8 +97,8 @@ export async function mintPOAPTokens({
  */
 export async function pollForTokenMintStatus({
   poapId,
-  maxAttempts = 10,
-  intervalMs = 3000,
+  maxAttempts = 30,
+  intervalMs = 1000,
   onMinted,
   onTimeout,
   onProgress,
@@ -124,8 +124,9 @@ export async function pollForTokenMintStatus({
       const response = await fetch(`/api/poaps/${poapId}/token/status`, {
         method: 'GET',
         headers: {
-          'Cache-Control': 'no-cache',
+          'Cache-Control': 'no-cache, no-store',
           Pragma: 'no-cache',
+          'If-None-Match': Math.random().toString(), // Add random value to prevent caching
         },
       });
 
@@ -168,8 +169,11 @@ export async function pollForTokenMintStatus({
     return { minted: true, mintAddress: initialStatus.mintAddress };
   }
 
-  // Set up polling
+  // Set up polling with exponential backoff
   return new Promise<{ minted: boolean; mintAddress?: string }>(resolve => {
+    let currentInterval = intervalMs;
+    const maxInterval = 3000; // Maximum interval of 3 seconds
+
     const interval = setInterval(async () => {
       attempts++;
       const status = await checkTokenMinted();
@@ -184,7 +188,33 @@ export async function pollForTokenMintStatus({
         console.log(`Max attempts (${maxAttempts}) reached for POAP ${poapId}. Token not minted.`);
         if (onTimeout) onTimeout();
         resolve({ minted: false });
+      } else {
+        // Adjust interval with exponential backoff (but cap at maxInterval)
+        currentInterval = Math.min(currentInterval * 1.5, maxInterval);
+        clearInterval(interval);
+
+        // Set new interval with updated timing
+        setTimeout(() => {
+          const newInterval = setInterval(async () => {
+            attempts++;
+            const status = await checkTokenMinted();
+
+            if (status.minted) {
+              clearInterval(newInterval);
+              console.log(`Token minted for POAP ${poapId} after ${attempts} attempts`);
+              if (onMinted) onMinted();
+              resolve({ minted: true, mintAddress: status.mintAddress });
+            } else if (attempts >= maxAttempts) {
+              clearInterval(newInterval);
+              console.log(
+                `Max attempts (${maxAttempts}) reached for POAP ${poapId}. Token not minted.`
+              );
+              if (onTimeout) onTimeout();
+              resolve({ minted: false });
+            }
+          }, currentInterval);
+        }, currentInterval);
       }
-    }, intervalMs);
+    }, currentInterval);
   });
 }
