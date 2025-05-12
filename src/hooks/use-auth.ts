@@ -1,6 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
+import { toast } from 'sonner';
 
 // User storage key
 const USER_STORAGE_KEY = 'userProfile';
@@ -16,6 +18,7 @@ const DEFAULT_USER = {
 export function useAuth() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [user, setUser] = useState(DEFAULT_USER);
+  const router = useRouter();
 
   // Check authentication status on client-side
   useEffect(() => {
@@ -44,16 +47,39 @@ export function useAuth() {
   }, []);
 
   // Logout function
-  const handleLogout = (callback?: () => void) => {
-    // Clear any auth state and localStorage
-    localStorage.removeItem(USER_STORAGE_KEY);
-    localStorage.removeItem('solana_auth_token');
-    setUser(DEFAULT_USER);
-    setIsAuthenticated(false);
+  const handleLogout = useCallback(async (callback?: () => void) => {
+    try {
+      // First, clear localStorage items
+      localStorage.removeItem(USER_STORAGE_KEY);
+      localStorage.removeItem('solana_auth_token');
+      
+      // Clear the cookie used by middleware
+      try {
+        const { deleteCookie } = await import('cookies-next');
+        deleteCookie('solana_auth_token');
+      } catch (cookieError) {
+        console.error('Error clearing auth cookie:', cookieError);
+      }
+      
+      // Update local state
+      setUser(DEFAULT_USER);
+      setIsAuthenticated(false);
+      
+      toast.success('Successfully logged out');
 
-    // Execute callback if provided
-    if (callback) callback();
-  };
+      // Execute callback if provided (like closing the menu)
+      if (callback) {
+        callback();
+      }
+      
+      // Redirect to home page after logout
+      // Make sure to use window.location for a full page refresh to clear any remaining state
+      window.location.href = '/';
+    } catch (error) {
+      console.error('Logout error:', error);
+      toast.error('Failed to log out completely');
+    }
+  }, []);
 
   return {
     isAuthenticated,
