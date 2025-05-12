@@ -15,7 +15,6 @@ import { RecentPOAPs } from './navigation/recent-poaps';
 import { POAPResults } from './navigation/poap-results';
 import {
   mainNavigationItems,
-  userNavigationItems,
   supportNavigationItems,
 } from './navigation/navigation-data';
 import { usePoapData } from '@/hooks/use-poap-data';
@@ -147,14 +146,6 @@ export function NavigationMenu({
                 </svg>
               </summary>
               <div className="pt-2 pb-1 px-1 space-y-1 mt-1 bg-white srounded-md border border-neutral-100">
-                {/* User Navigation */}
-                <NavItems
-                  items={userNavigationItems}
-                  isAuthenticated={isAuthenticated}
-                  os={os}
-                  onClose={externalOnClose}
-                />
-
                 {/* Support Navigation */}
                 <NavItems
                   items={supportNavigationItems}
