@@ -147,7 +147,7 @@ export function FooterSection() {
         <div className="py-4 sm:py-6 border-t border-neutral-200 dark:border-neutral-800">
           <div className="flex flex-col sm:flex-row justify-between items-center">
             <p className="text-xs sm:text-sm text-neutral-600 dark:text-neutral-400">
-              &copy; {new Date().getFullYear()} POP. All rights reserved.
+              &copy; {new Date().getFullYear()} SOONA. All rights reserved.
             </p>
             <div className="mt-2 sm:mt-0">
               <p className="text-xs sm:text-sm text-neutral-500 dark:text-neutral-500">
