@@ -13,10 +13,7 @@ import { NavItems } from './navigation/nav-items';
 import { KeyboardShortcuts } from './navigation/keyboard-shortcuts';
 import { RecentPOAPs } from './navigation/recent-poaps';
 import { POAPResults } from './navigation/poap-results';
-import {
-  mainNavigationItems,
-  supportNavigationItems,
-} from './navigation/navigation-data';
+import { mainNavigationItems, supportNavigationItems } from './navigation/navigation-data';
 import { usePoapData } from '@/hooks/use-poap-data';
 import { useAuth } from '@/hooks/use-auth';
 import { useKeyboardShortcuts } from '@/hooks/use-keyboard-shortcuts';

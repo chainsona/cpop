@@ -10,7 +10,7 @@ export function FooterSection() {
         <div className="py-12">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
             <div className="space-y-4">
-              <h3 className="text-lg font-semibold">POAP Platform</h3>
+              <h3 className="text-lg font-semibold">POAP</h3>
               <p className="text-sm text-neutral-600 dark:text-neutral-400 max-w-xs">
                 Create, distribute and manage digital proof of participation tokens for your events
                 and communities.
@@ -160,7 +160,7 @@ export function FooterSection() {
         <div className="py-6 border-t border-neutral-200 dark:border-neutral-800">
           <div className="flex flex-col sm:flex-row justify-between items-center">
             <p className="text-sm text-neutral-600 dark:text-neutral-400">
-              &copy; {new Date().getFullYear()} POAP Platform. All rights reserved.
+              &copy; {new Date().getFullYear()} POAP. All rights reserved.
             </p>
             <div className="mt-4 sm:mt-0">
               <p className="text-sm text-neutral-500 dark:text-neutral-500">Built on Solana</p>

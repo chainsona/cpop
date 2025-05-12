@@ -11,12 +11,14 @@ import { NavigationProvider } from '@/components/layout/navigation-context';
 const inter = Inter({ subsets: ['latin'] });
 
 // App name constant to ensure consistency
-export const APP_NAME = 'POAP Platform';
+export const APP_NAME = 'POAP';
+// Base URL for the application
+const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://ngrok.maikers.com';
 
 export const metadata: Metadata = {
   title: {
-    template: '%s | POAP Platform',
-    default: 'POAP Platform | Create Digital Proof of Attendance Tokens',
+    template: '%s | POAP',
+    default: 'POAP | Create Digital Proof of Attendance Tokens',
   },
   description:
     'Create, distribute and manage digital proof of attendance tokens that your community will love to collect and share.',
@@ -30,28 +32,41 @@ export const metadata: Metadata = {
     'NFT',
     'community',
   ],
-  authors: [{ name: 'POAP Platform' }],
-  creator: 'POAP Platform',
-  publisher: 'POAP Platform',
+  authors: [{ name: 'POAP' }],
+  creator: 'POAP',
+  publisher: 'POAP',
+  metadataBase: new URL(BASE_URL),
   openGraph: {
     type: 'website',
     locale: 'en_US',
-    url: 'https://poapplatform.com',
-    title: 'POAP Platform | Create Digital Proof of Attendance Tokens',
+    url: BASE_URL,
+    title: 'POAP | Create Digital Proof of Attendance Tokens',
     description:
       'Create, distribute and manage digital proof of attendance tokens that your community will love to collect and share.',
-    siteName: 'POAP Platform',
+    siteName: 'POAP',
+    images: [
+      {
+        url: `${BASE_URL}/og-image.jpg`, 
+        width: 1200,
+        height: 630,
+        alt: 'POAP',
+      }
+    ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'POAP Platform | Create Digital Proof of Attendance Tokens',
+    title: 'POAP | Create Digital Proof of Attendance Tokens',
     description:
       'Create memorable digital tokens for your events with our easy-to-use POAP platform.',
     creator: '@poapplatform',
+    images: [`${BASE_URL}/og-image.jpg`],
   },
   robots: 'index, follow',
   alternates: {
-    canonical: 'https://poapplatform.com',
+    canonical: BASE_URL,
+  },
+  other: {
+    'og:logo': `${BASE_URL}/logo.png`,
   },
 };
 
@@ -72,7 +87,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             __html: JSON.stringify({
               '@context': 'https://schema.org',
               '@type': 'WebSite',
-              name: 'POAP Platform',
+              name: 'POAP',
               url: 'https://poapplatform.com',
               description: 'Create, distribute and manage digital proof of attendance tokens.',
               potentialAction: {
@@ -89,7 +104,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             __html: JSON.stringify({
               '@context': 'https://schema.org',
               '@type': 'Organization',
-              name: 'POAP Platform',
+              name: 'POAP',
               url: 'https://poapplatform.com',
               logo: 'https://poapplatform.com/logo.png',
               sameAs: ['https://twitter.com/poapplatform', 'https://discord.gg/poapplatform'],
