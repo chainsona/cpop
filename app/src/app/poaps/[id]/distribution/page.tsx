@@ -480,16 +480,28 @@ export default function POAPDistributionPage() {
                 </Button>
 
                 {selectedMethod === 'links' && (
-                  <ClaimLinksForm id={id} onSuccess={() => setSelectedMethod(null)} />
+                  <ClaimLinksForm id={id} onSuccess={() => {
+                    setSelectedMethod(null);
+                    handleDistributionMethodAdded({} as DistributionMethod);
+                  }} />
                 )}
                 {selectedMethod === 'secret' && (
-                  <SecretWordForm id={id} onSuccess={() => setSelectedMethod(null)} />
+                  <SecretWordForm id={id} onSuccess={() => {
+                    setSelectedMethod(null);
+                    handleDistributionMethodAdded({} as DistributionMethod);
+                  }} />
                 )}
                 {selectedMethod === 'location' && (
-                  <LocationBasedForm id={id} onSuccess={() => setSelectedMethod(null)} />
+                  <LocationBasedForm id={id} onSuccess={() => {
+                    setSelectedMethod(null);
+                    handleDistributionMethodAdded({} as DistributionMethod);
+                  }} />
                 )}
                 {selectedMethod === 'airdrop' && (
-                  <AirdropForm id={id} onSuccess={() => setSelectedMethod(null)} />
+                  <AirdropForm id={id} onSuccess={() => {
+                    setSelectedMethod(null);
+                    handleDistributionMethodAdded({} as DistributionMethod);
+                  }} />
                 )}
               </div>
             )}
