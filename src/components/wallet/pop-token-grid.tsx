@@ -53,8 +53,12 @@ export function POPTokenGrid({
     }
   });
 
+  // Identify pending tokens (those with a transactionSignature)
+  const pendingTokens = allTokens.filter(token => token.transactionSignature);
+
   const walletCount = uniqueTokens.length;
   const totalCount = allTokens.length;
+  const pendingCount = pendingTokens.length;
 
   if (loading) {
     return (
@@ -112,6 +116,7 @@ export function POPTokenGrid({
       <TabsList className="mb-6">
         <TabsTrigger value="all">All ({totalCount})</TabsTrigger>
         <TabsTrigger value="wallet">In Wallet ({walletCount})</TabsTrigger>
+        <TabsTrigger value="pending">Pending ({pendingCount})</TabsTrigger>
       </TabsList>
 
       <TabsContent value="all" className="mt-0">
@@ -144,6 +149,22 @@ export function POPTokenGrid({
             </div>
           ) : (
             popTokens.map(token => <POPTokenCard key={`pop-${token.id}`} {...token} />)
+          )}
+        </div>
+      </TabsContent>
+
+      <TabsContent value="pending" className="mt-0">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 auto-rows-fr">
+          {pendingTokens.length === 0 ? (
+            <div className="col-span-full">
+              <EmptyState
+                message="No pending POP tokens found."
+                showButton={false}
+                icon={<Wallet className="h-8 w-8 text-neutral-400" />}
+              />
+            </div>
+          ) : (
+            pendingTokens.map(token => <POPTokenCard key={`pending-${token.id}`} {...token} />)
           )}
         </div>
       </TabsContent>

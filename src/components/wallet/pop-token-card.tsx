@@ -82,22 +82,6 @@ export function POPTokenCard({
         <CardContent className="pb-2 flex-1">
           <p className="text-sm text-neutral-600 line-clamp-2">{description}</p>
           <div className="mt-2 flex flex-wrap gap-2">
-        <CardContent className="pb-2 flex-1">
-        <CardContent className="pb-2 flex-1">w
-            {amount > 1 && (
-              <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                {`${amount}x`}
-              </Badge>
-            )}
-            {amount > 1 && (
-              <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                {`${amount}x`}
-              </Badge>
-            )}
-              <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-              cPOP
-              </Badge>
-            )}
             {amount > 1 && (
               <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
                 {`${amount}x`}
