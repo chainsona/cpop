@@ -1,13 +1,23 @@
 import { createClient } from '@supabase/supabase-js';
 import fetch from 'cross-fetch';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// Check if required environment variables are available
+if (!supabaseUrl) {
+  throw new Error('NEXT_PUBLIC_SUPABASE_URL is required in environment variables');
+}
 
-// Create a Supabase client with the service role key
+// Create Supabase client with anon key for client-side operations
+export const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+// Check if service role key is available for admin operations
+if (!supabaseServiceKey) {
+  console.warn('SUPABASE_SERVICE_ROLE_KEY is missing. Admin operations will not work.');
+}
+
+// Create a Supabase client with the service role key for admin operations
 export const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
   auth: {
     autoRefreshToken: false,
