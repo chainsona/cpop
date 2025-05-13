@@ -84,13 +84,15 @@ export const CreateExamplePOP = () => {
   const router = useRouter();
 
   useEffect(() => {
-    // Check if we're in development environment
-    // We need to check in useEffect because Next.js environments are not
-    // available during server-side rendering for client components
-    setShowButton(process.env.NODE_ENV === 'development');
+    // Check if NEXT_PUBLIC_SHOW_EXAMPLE_BUTTON is set to true
+    // Falls back to development environment check if the env var is not set
+    const showExampleButton = process.env.NEXT_PUBLIC_SHOW_EXAMPLE_BUTTON === 'true';
+    const isDevelopment = process.env.NODE_ENV === 'development';
+    
+    setShowButton(showExampleButton || isDevelopment);
   }, []);
 
-  // Don't render anything if not in development mode
+  // Don't render anything if button should not be shown
   if (!showButton) {
     return null;
   }
