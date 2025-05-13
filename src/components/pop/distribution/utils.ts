@@ -38,7 +38,10 @@ export const formatExpiry = (expiresAt: string | null): string => {
  * Generate claim URL from token
  */
 export const getClaimUrl = (token: string): string => {
-  return `${window.location.origin}/claim/${token}`;
+  const appUrl = typeof process !== 'undefined' && process.env.NEXT_PUBLIC_APP_URL 
+    ? process.env.NEXT_PUBLIC_APP_URL 
+    : (typeof window !== 'undefined' ? window.location.origin : '');
+  return `${appUrl}/claim/${token}`;
 };
 
 /**
