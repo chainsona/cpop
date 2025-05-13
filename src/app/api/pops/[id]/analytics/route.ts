@@ -76,6 +76,24 @@ export async function GET(request: Request, { params }: { params: Promise<Params
         return NextResponse.json({ error: 'POP not found' }, { status: 404 });
       }
 
+      // Fetch all claims for this POP to use for timeline data
+      const popClaims = await prisma.pOPClaim.findMany({
+        where: { popId: id },
+        select: {
+          id: true,
+          distributionMethodId: true,
+          createdAt: true,
+          distributionMethod: {
+            select: {
+              type: true,
+              locationBased: {
+                select: { city: true }
+              }
+            }
+          }
+        }
+      });
+
       // Fetch distribution methods directly
       const distributionMethods = await prisma.distributionMethod.findMany({
         where: {
@@ -119,45 +137,50 @@ export async function GET(request: Request, { params }: { params: Promise<Params
       let availableClaims = 0;
       let claimsByMethod: {method: string, count: number}[] = [];
       let claimsByDay: Record<string, number> = {};
+      let methodClaimsMap: Record<string, number> = {};
 
-      for (const method of distributionMethods) {
-        let methodClaims = 0;
+      // Group claims by method type
+      for (const claim of popClaims) {
+        // Format the date (YYYY-MM-DD)
+        const date = claim.createdAt.toISOString().split('T')[0];
+        
+        // Increment the count for this day
+        claimsByDay[date] = (claimsByDay[date] || 0) + 1;
+        
+        // Get method type display name
         let methodName = '';
+        if (claim.distributionMethod.type === 'LocationBased' && claim.distributionMethod.locationBased?.city) {
+          methodName = `Location - ${claim.distributionMethod.locationBased.city}`;
+        } else {
+          methodName = getMethodDisplayName(claim.distributionMethod.type);
+        }
+        
+        // Track claims by method
+        methodClaimsMap[methodName] = (methodClaimsMap[methodName] || 0) + 1;
+      }
+      
+      // Convert methods map to array
+      for (const [method, count] of Object.entries(methodClaimsMap)) {
+        claimsByMethod.push({ method, count });
+        totalClaims += count;
+      }
+
+      // Calculate available claims from distribution methods
+      for (const method of distributionMethods) {
         let maxClaims = 0;
 
-        // Calculate claims based on distribution method type
-        if (method.type === 'ClaimLinks' && method.claimLinks?.length > 0) {
-          methodClaims = method.claimLinks.length;
-          methodName = 'Link';
-          maxClaims = method.claimLinks.length; // For links, max = claimed count
-
-          // Process claims by day for this method
-          for (const link of method.claimLinks) {
-            if (link.claimedAt) {
-              const date = new Date(link.claimedAt).toISOString().split('T')[0];
-              claimsByDay[date] = (claimsByDay[date] || 0) + 1;
-            }
-          }
+        if (method.type === 'ClaimLinks') {
+          // For links, available = total links created
+          const totalLinks = await prisma.claimLink.count({
+            where: { distributionMethodId: method.id }
+          });
+          maxClaims = totalLinks;
         } else if (method.type === 'SecretWord' && method.secretWord) {
-          methodClaims = method.secretWord.claimCount || 0;
-          methodName = 'Secret';
           maxClaims = method.secretWord.maxClaims || 0;
         } else if (method.type === 'LocationBased' && method.locationBased) {
-          methodName = `Location${method.locationBased.city ? ` - ${method.locationBased.city}` : ''}`;
-          methodClaims = method.locationBased.claimCount || 0;
           maxClaims = method.locationBased.maxClaims || 0;
         } else if (method.type === 'Airdrop' && method.airdrop) {
-          methodName = 'Airdrop';
-          methodClaims = method.airdrop.claimCount || 0;
           maxClaims = method.airdrop.addresses?.length || 0;
-        }
-
-        if (methodClaims > 0) {
-          claimsByMethod.push({
-            method: methodName,
-            count: methodClaims,
-          });
-          totalClaims += methodClaims;
         }
         
         availableClaims += maxClaims;

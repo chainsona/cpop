@@ -294,7 +294,7 @@ export async function mintTokensAfterDistributionCreated(popId: string): Promise
     } else {
       console.log(`Minting token for POP ${popId} (not first distribution method)`);
     }
-    
+
     // Final check to see if a token was created in a parallel process (race condition)
     const confirmedToken = await prisma.popToken.findFirst({
       where: { popId },

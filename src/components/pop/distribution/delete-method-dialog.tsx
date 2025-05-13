@@ -24,7 +24,7 @@ export const DeleteMethodDialog = ({
 }: DeleteMethodDialogProps) => {
   return (
     <AlertDialog open={isOpen} onOpenChange={onOpenChange}>
-      <AlertDialogContent className="max-h-[90vh] overflow-auto">
+      <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>
             Are you sure you want to delete this distribution method?
