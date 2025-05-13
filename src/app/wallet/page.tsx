@@ -9,6 +9,7 @@ import { POPTokenProps } from '@/components/wallet/pop-token-card';
 import { POPTokenGrid } from '@/components/wallet/pop-token-grid';
 import { Container } from '@/components/ui/container';
 import { PageHeader } from '@/components/ui/page-header';
+import { toast } from 'sonner';
 
 export default function WalletPage() {
   const [tokens, setTokens] = useState<POPTokenProps[]>([]);
@@ -16,6 +17,11 @@ export default function WalletPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { isConnected, isAuthenticated, walletAddress } = useWalletContext();
+
+  // Debug logging
+  useEffect(() => {
+    console.log('Wallet connection state:', { isConnected, isAuthenticated, walletAddress });
+  }, [isConnected, isAuthenticated, walletAddress]);
 
   // Load claimed POPs and blockchain tokens when the wallet is authenticated
   const fetchData = async () => {
@@ -129,10 +135,12 @@ export default function WalletPage() {
     fetchData();
   }, [isAuthenticated, walletAddress]);
 
-  const handleAuthChange = (authState: boolean) => {
-    if (authState) {
-      // Reload data when authenticated
-      fetchData();
+  // Handle authentication change
+  const handleAuthChange = (authenticated: boolean) => {
+    console.log('Authentication changed:', authenticated);
+    if (authenticated) {
+      // Trigger a reload of token data when authenticated
+      handleRetry();
     }
   };
 

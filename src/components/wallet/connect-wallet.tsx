@@ -16,6 +16,8 @@ import { toast } from 'sonner';
 import { createSignatureMessage } from '@/lib/solana-auth';
 import { setCookie, getCookie, deleteCookie } from 'cookies-next';
 import { useRouter, usePathname } from 'next/navigation';
+import { useWallet } from '@solana/wallet-adapter-react';
+import { useWalletModal } from '@solana/wallet-adapter-react-ui';
 
 interface ConnectWalletProps {
   variant?: 'default' | 'outline' | 'ghost';
@@ -35,12 +37,16 @@ export function ConnectWallet({
     connecting, 
     walletAddress, 
     signMessage, 
-    connect, 
     disconnect, 
     isProtectedPage,
     isAuthenticated,
     authenticate 
   } = useWalletContext();
+  
+  // Use direct wallet adapter hooks for better reliability
+  const { publicKey } = useWallet();
+  const { setVisible } = useWalletModal();
+  
   const [isClipboardCopied, setIsClipboardCopied] = useState(false);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const router = useRouter();
@@ -79,13 +85,15 @@ export function ConnectWallet({
     }
   };
 
-  // Handle wallet connection
+  // Handle wallet connection - directly use the wallet adapter
   const handleConnect = async () => {
     try {
-      await connect();
-      // The authentication will be automatically triggered by the context
+      console.log('Opening wallet connection modal...');
+      // Directly open the wallet selection modal
+      setVisible(true);
     } catch (error) {
       console.error('Connection error:', error);
+      toast.error('Failed to connect wallet');
     }
   };
 
@@ -93,7 +101,7 @@ export function ConnectWallet({
   const handleDisconnect = async () => {
     try {
       await disconnect();
-      // clearAuthTokens is no longer needed here as disconnect in the context handles this
+      toast.success('Wallet disconnected');
     } catch (error) {
       console.error('Disconnection error:', error);
       // Still try to clear tokens even if disconnect fails
@@ -110,7 +118,12 @@ export function ConnectWallet({
   const handleAuthenticate = async () => {
     setIsAuthenticating(true);
     try {
-      await authenticate();
+      const success = await authenticate();
+      if (success) {
+        toast.success('Successfully authenticated');
+      } else {
+        toast.error('Authentication failed');
+      }
     } catch (error) {
       console.error('Authentication error:', error);
       toast.error('Failed to authenticate with wallet');

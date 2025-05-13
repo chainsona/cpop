@@ -4,7 +4,7 @@ import { createContext, useContext, useState, useEffect, ReactNode } from 'react
 import { useConnection, useWallet } from '@solana/wallet-adapter-react';
 import { WalletAdapterNetwork, WalletError, WalletName } from '@solana/wallet-adapter-base';
 import { ConnectionProvider, WalletProvider } from '@solana/wallet-adapter-react';
-import { WalletModalProvider } from '@solana/wallet-adapter-react-ui';
+import { WalletModalProvider, useWalletModal } from '@solana/wallet-adapter-react-ui';
 import {
   PhantomWalletAdapter,
   SolflareWalletAdapter,
@@ -95,6 +95,7 @@ function WalletContextContent({ children }: { children: ReactNode }) {
     disconnect: adapterDisconnect,
     wallet,
   } = useWallet();
+  const { setVisible } = useWalletModal();
   const router = useRouter();
   const pathname = usePathname();
 
@@ -315,6 +316,9 @@ function WalletContextContent({ children }: { children: ReactNode }) {
     try {
       // The wallet modal will handle wallet selection
       // No need to explicitly select a wallet here
+      // Instead, directly show the wallet modal
+      console.log('Opening wallet modal from context');
+      setVisible(true);
     } catch (error) {
       toast.error('Failed to connect wallet');
       console.error('Wallet connection error:', error);
