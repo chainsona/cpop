@@ -1,119 +1,166 @@
-import * as React from 'react';
-import { UploadCloud } from 'lucide-react';
+'use client';
+
+import { useState, useCallback } from 'react';
+import { useDropzone } from 'react-dropzone';
+import { useSupabase } from '@/hooks/use-supabase';
+import { Button } from '@/components/ui/button';
+import { Progress } from '@/components/ui/progress';
+import { XCircle, Upload, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface FileUploadProps {
-  onFileChange: (file: File | null) => void;
-  value?: string;
-  showPreview?: boolean;
+  onUploadComplete?: (url: string) => void;
+  onUploadError?: (error: string) => void;
   className?: string;
-  accept?: string;
+  accept?: Record<string, string[]>;
   maxSize?: number;
+  label?: string;
 }
 
 export function FileUpload({
-  onFileChange,
-  value,
-  showPreview = true,
+  onUploadComplete,
+  onUploadError,
   className,
-  accept = 'image/*',
+  accept = {
+    'image/*': ['.jpeg', '.jpg', '.png', '.gif', '.webp'],
+  },
   maxSize = 5 * 1024 * 1024, // 5MB
-  ...props
+  label = 'Drag & drop or click to upload',
 }: FileUploadProps) {
-  const inputRef = React.useRef<HTMLInputElement>(null);
-  const [previewUrl, setPreviewUrl] = React.useState<string | null>(value || null);
-  const [isDragging, setIsDragging] = React.useState(false);
+  const { uploadImage, loading, error } = useSupabase();
+  const [progress, setProgress] = useState(0);
+  const [uploadedUrl, setUploadedUrl] = useState<string>('');
+  const [uploadState, setUploadState] = useState<'idle' | 'uploading' | 'success' | 'error'>('idle');
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0] || null;
-    processFile(file);
-  };
+  const handleUpload = useCallback(async (file: File) => {
+    setUploadState('uploading');
+    setProgress(10);
 
-  const processFile = (file: File | null) => {
+    // Simulate progress while waiting for server response
+    const progressInterval = setInterval(() => {
+      setProgress((prev) => {
+        const next = prev + 5;
+        return next > 90 ? 90 : next;
+      });
+    }, 200);
+
+    try {
+      const url = await uploadImage(file);
+
+      if (url) {
+        clearInterval(progressInterval);
+        setProgress(100);
+        setUploadedUrl(url);
+        setUploadState('success');
+        onUploadComplete?.(url);
+      } else {
+        throw new Error('Upload failed');
+      }
+    } catch (err) {
+      clearInterval(progressInterval);
+      setProgress(0);
+      setUploadState('error');
+      const errorMessage = err instanceof Error ? err.message : 'Upload failed';
+      onUploadError?.(errorMessage);
+    }
+  }, [uploadImage, onUploadComplete, onUploadError]);
+
+  const onDrop = useCallback((acceptedFiles: File[]) => {
+    const file = acceptedFiles[0];
     if (file) {
-      if (maxSize && file.size > maxSize) {
-        alert(`File size exceeds the maximum allowed size (${maxSize / (1024 * 1024)}MB)`);
-        return;
-      }
-
-      onFileChange(file);
-      if (showPreview) {
-        const reader = new FileReader();
-        reader.onload = () => {
-          setPreviewUrl(reader.result as string);
-        };
-        reader.readAsDataURL(file);
-      }
-    } else {
-      onFileChange(null);
-      setPreviewUrl(null);
+      handleUpload(file);
     }
+  }, [handleUpload]);
+
+  const { getRootProps, getInputProps, isDragActive, fileRejections } = useDropzone({
+    onDrop,
+    accept,
+    maxSize,
+    multiple: false,
+  });
+
+  const resetUpload = () => {
+    setUploadState('idle');
+    setProgress(0);
+    setUploadedUrl('');
   };
 
-  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    setIsDragging(true);
-  };
-
-  const handleDragLeave = () => {
-    setIsDragging(false);
-  };
-
-  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    setIsDragging(false);
-
-    const file = e.dataTransfer.files?.[0] || null;
-    processFile(file);
-
-    // Update the input value
-    if (file && inputRef.current) {
-      const dataTransfer = new DataTransfer();
-      dataTransfer.items.add(file);
-      inputRef.current.files = dataTransfer.files;
+  const renderContent = () => {
+    if (uploadState === 'success') {
+      return (
+        <div className="flex flex-col items-center">
+          <div className="mb-2 flex items-center justify-center">
+            <Check className="h-8 w-8 text-green-500" />
+          </div>
+          <p className="text-sm text-green-600">Upload successful</p>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={resetUpload} 
+            className="mt-4"
+          >
+            Upload Another File
+          </Button>
+        </div>
+      );
     }
+
+    if (uploadState === 'error' || error) {
+      return (
+        <div className="flex flex-col items-center">
+          <div className="mb-2 flex items-center justify-center">
+            <XCircle className="h-8 w-8 text-red-500" />
+          </div>
+          <p className="text-sm text-red-600">{error || 'Upload failed'}</p>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={resetUpload} 
+            className="mt-4"
+          >
+            Try Again
+          </Button>
+        </div>
+      );
+    }
+
+    if (uploadState === 'uploading') {
+      return (
+        <div className="w-full max-w-xs">
+          <p className="mb-2 text-sm text-center">Uploading...</p>
+          <Progress value={progress} className="h-2" />
+          <p className="mt-2 text-xs text-center text-muted-foreground">{progress}%</p>
+        </div>
+      );
+    }
+
+    return (
+      <div className="flex flex-col items-center">
+        <Upload className="mb-2 h-8 w-8 text-muted-foreground" />
+        <p className="mb-1 text-sm">{label}</p>
+        <p className="text-xs text-muted-foreground">Max size: {(maxSize / (1024 * 1024)).toFixed(0)}MB</p>
+        {fileRejections.length > 0 && (
+          <p className="mt-2 text-xs text-red-600">
+            {fileRejections[0].errors[0].message}
+          </p>
+        )}
+      </div>
+    );
   };
 
   return (
-    <div className={cn('space-y-2', className)}>
-      <div
-        className={cn(
-          'flex flex-col items-center justify-center border-2 border-dashed rounded-lg p-6 transition-colors',
-          isDragging ? 'border-neutral-400 bg-neutral-50' : 'border-neutral-200',
-          previewUrl ? 'h-[250px]' : 'h-[150px]'
-        )}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
-      >
-        {previewUrl ? (
-          <div className="h-full w-full flex items-center justify-center overflow-hidden">
-            <img src={previewUrl} alt="Preview" className="max-h-full max-w-full object-contain" />
-          </div>
-        ) : (
-          <div className="flex flex-col items-center justify-center text-center">
-            <UploadCloud className="h-10 w-10 text-neutral-400 mb-2" />
-            <p className="text-sm text-neutral-500 mb-1">
-              Drag and drop your image here, or click to browse
-            </p>
-            <p className="text-xs text-neutral-400">PNG, JPG, or WEBP up to 5MB</p>
-          </div>
-        )}
-        <input
-          ref={inputRef}
-          type="file"
-          accept={accept}
-          className="hidden"
-          onChange={handleFileChange}
-        />
-      </div>
-      <button
-        type="button"
-        onClick={() => inputRef.current?.click()}
-        className="text-sm text-neutral-500 hover:underline"
-      >
-        {previewUrl ? 'Change image' : 'Select image'}
-      </button>
+    <div
+      {...getRootProps()}
+      className={cn(
+        "flex flex-col items-center justify-center w-full p-6 border-2 border-dashed rounded-lg cursor-pointer transition-colors",
+        isDragActive ? "border-primary bg-primary/5" : "border-muted-foreground/25 hover:border-primary/50",
+        uploadState === 'error' ? "border-red-500/50 bg-red-500/5" : "",
+        uploadState === 'success' ? "border-green-500/50 bg-green-500/5" : "",
+        className
+      )}
+    >
+      <input {...getInputProps()} />
+      {renderContent()}
     </div>
   );
 }

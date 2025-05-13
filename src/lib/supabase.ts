@@ -1,3 +1,5 @@
+'use server';
+
 import { createClient } from '@supabase/supabase-js';
 import fetch from 'cross-fetch';
 
@@ -9,16 +11,13 @@ if (!supabaseUrl) {
   throw new Error('NEXT_PUBLIC_SUPABASE_URL is required in environment variables');
 }
 
-// Create Supabase client with anon key for client-side operations
-export const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
 // Check if service role key is available for admin operations
 if (!supabaseServiceKey) {
-  console.warn('SUPABASE_SERVICE_ROLE_KEY is missing. Admin operations will not work.');
+  throw new Error('SUPABASE_SERVICE_ROLE_KEY is required. Server operations will not work.');
 }
 
-// Create a Supabase client with the service role key for admin operations
-export const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
+// Create a Supabase client with the service role key for server operations
+const supabase = createClient(supabaseUrl, supabaseServiceKey, {
   auth: {
     autoRefreshToken: false,
     persistSession: false,
@@ -35,11 +34,12 @@ const STORAGE_BUCKET = 'cpop';
  */
 export async function uploadImage(
   file: File,
-  onProgress?: (progress: number) => void
+  onProgressUpdate?: (progress: number) => void
 ): Promise<string> {
   try {
-    onProgress?.(10);
-
+    // This function is now a server action and will be called from the client
+    // Progress updates will be sent back to the client
+    
     // Check file type & size
     if (!file.type.startsWith('image/')) {
       throw new Error('File must be an image');
@@ -49,52 +49,33 @@ export async function uploadImage(
       throw new Error('File size must be less than 5MB');
     }
 
-    onProgress?.(20);
-
     // Generate a unique filename
     const fileExt = file.name.split('.').pop();
     const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 15)}.${fileExt}`;
     const filePath = `img/${fileName}`;
 
-    onProgress?.(40);
+    // Upload the file
+    const { error: uploadError } = await supabase.storage
+      .from(STORAGE_BUCKET)
+      .upload(filePath, file, {
+        cacheControl: '3600',
+        upsert: false,
+      });
 
-    try {
-      // Skip bucket existence check - assume bucket exists
-
-      onProgress?.(50);
-
-      // Upload the file using admin client with service role key
-      const { error: uploadError } = await supabaseAdmin.storage
-        .from(STORAGE_BUCKET)
-        .upload(filePath, file, {
-          cacheControl: '3600',
-          upsert: false,
-        });
-
-      if (uploadError) {
-        throw uploadError;
-      }
-
-      onProgress?.(80);
-
-      // Get the public URL for the uploaded file
-      const { data: publicUrlData } = supabaseAdmin.storage
-        .from(STORAGE_BUCKET)
-        .getPublicUrl(filePath);
-
-      onProgress?.(100);
-
-      if (!publicUrlData.publicUrl) {
-        throw new Error('Failed to get public URL for uploaded image');
-      }
-
-      return publicUrlData.publicUrl;
-    } catch (error) {
-      console.error('Supabase Storage error:', error);
-      throw new Error(
-        `Failed to upload image: ${error instanceof Error ? error.message : 'Unknown error'}`
-      );
+    if (uploadError) {
+      throw uploadError;
     }
+
+    // Get the public URL for the uploaded file
+    const { data: publicUrlData } = supabase.storage
+      .from(STORAGE_BUCKET)
+      .getPublicUrl(filePath);
+
+    if (!publicUrlData.publicUrl) {
+      throw new Error('Failed to get public URL for uploaded image');
+    }
+
+    return publicUrlData.publicUrl;
   } catch (error) {
     console.error('Error uploading image:', error);
     throw error;
@@ -120,8 +101,8 @@ export async function deleteImage(imageUrl: string): Promise<void> {
 
     const filePath = urlParts[1];
 
-    // Delete the file from storage using admin client
-    const { error } = await supabaseAdmin.storage.from(STORAGE_BUCKET).remove([filePath]);
+    // Delete the file from storage
+    const { error } = await supabase.storage.from(STORAGE_BUCKET).remove([filePath]);
 
     if (error) {
       throw error;
@@ -139,7 +120,7 @@ export async function deleteImage(imageUrl: string): Promise<void> {
  */
 export async function uploadJsonMetadata(
   metadata: Record<string, any>,
-  filename: string
+  filename?: string
 ): Promise<string> {
   try {
     // Generate a unique filename if not provided
@@ -156,8 +137,8 @@ export async function uploadJsonMetadata(
     const arrayBuffer = await blob.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
-    // Upload to Supabase Storage using admin client with service role key
-    const { error: uploadError } = await supabaseAdmin.storage
+    // Upload to Supabase Storage
+    const { error: uploadError } = await supabase.storage
       .from(STORAGE_BUCKET)
       .upload(filePath, buffer, {
         contentType: 'application/json',
@@ -170,7 +151,7 @@ export async function uploadJsonMetadata(
     }
 
     // Get the public URL for the uploaded file
-    const { data: publicUrlData } = supabaseAdmin.storage
+    const { data: publicUrlData } = supabase.storage
       .from(STORAGE_BUCKET)
       .getPublicUrl(filePath);
 
@@ -181,6 +162,93 @@ export async function uploadJsonMetadata(
     return publicUrlData.publicUrl;
   } catch (error) {
     console.error('Error uploading JSON metadata:', error);
+    throw error;
+  }
+}
+
+/**
+ * Generic database query function
+ */
+export async function query<T = any>(
+  tableName: string,
+  queryFn: (query: any) => any
+): Promise<T[]> {
+  try {
+    let query = supabase.from(tableName).select();
+    query = queryFn(query);
+    
+    const { data, error } = await query;
+    
+    if (error) throw error;
+    return data as T[];
+  } catch (error) {
+    console.error(`Error querying ${tableName}:`, error);
+    throw error;
+  }
+}
+
+/**
+ * Insert a record into a table
+ */
+export async function insert<T = any>(
+  tableName: string,
+  data: Record<string, any>
+): Promise<T> {
+  try {
+    const { data: result, error } = await supabase
+      .from(tableName)
+      .insert(data)
+      .select()
+      .single();
+    
+    if (error) throw error;
+    return result as T;
+  } catch (error) {
+    console.error(`Error inserting into ${tableName}:`, error);
+    throw error;
+  }
+}
+
+/**
+ * Update a record in a table
+ */
+export async function update<T = any>(
+  tableName: string,
+  id: string | number,
+  data: Record<string, any>
+): Promise<T> {
+  try {
+    const { data: result, error } = await supabase
+      .from(tableName)
+      .update(data)
+      .eq('id', id)
+      .select()
+      .single();
+    
+    if (error) throw error;
+    return result as T;
+  } catch (error) {
+    console.error(`Error updating ${tableName}:`, error);
+    throw error;
+  }
+}
+
+/**
+ * Delete a record from a table
+ */
+export async function remove(
+  tableName: string,
+  id: string | number
+): Promise<void> {
+  try {
+    const { error } = await supabase
+      .from(tableName)
+      .delete()
+      .eq('id', id);
+    
+    if (error) throw error;
+  } catch (error) {
+    console.error(`Error deleting from ${tableName}:`, error);
     throw error;
   }
 }
