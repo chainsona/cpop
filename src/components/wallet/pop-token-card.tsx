@@ -37,7 +37,10 @@ export function POPTokenCard({
   const safeImageUrl = getSafeImageUrl(imageUrl);
 
   return (
-    <Card key={id} className="overflow-hidden hover:shadow-md transition-shadow border-blue-200 flex flex-col h-full">
+    <Card
+      key={id}
+      className="overflow-hidden hover:shadow-md transition-shadow border-blue-200 flex flex-col h-full"
+    >
       <div className="aspect-square relative">
         {imgError ? (
           <div className="absolute inset-0 flex items-center justify-center bg-neutral-100">
@@ -79,11 +82,29 @@ export function POPTokenCard({
         <CardContent className="pb-2 flex-1">
           <p className="text-sm text-neutral-600 line-clamp-2">{description}</p>
           <div className="mt-2 flex flex-wrap gap-2">
-            <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-              {`${amount}x`}
-            </Badge>
+        <CardContent className="pb-2 flex-1">
+        <CardContent className="pb-2 flex-1">w
+            {amount > 1 && (
+              <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                {`${amount}x`}
+              </Badge>
+            )}
+            {amount > 1 && (
+              <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                {`${amount}x`}
+              </Badge>
+            )}
+              <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+              cPOP
+              </Badge>
+            )}
+            {amount > 1 && (
+              <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                {`${amount}x`}
+              </Badge>
+            )}
             <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
-              POP
+              cPOP
             </Badge>
             {isCompressed && (
               <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200">

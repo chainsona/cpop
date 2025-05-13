@@ -29,7 +29,7 @@ export function AddMethodDialog({ popId, onClose, onMethodAdded }: AddMethodDial
         </DialogHeader>
         <div className="py-4">
           <p className="text-neutral-600 mb-6">
-            Choose a method to distribute your POPtokens. This will automatically mint compressed 
+            Choose a method to distribute your POP Tokens. This will automatically mint compressed 
             tokens for your participants.
           </p>
           

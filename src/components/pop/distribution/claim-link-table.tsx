@@ -244,7 +244,7 @@ export const ClaimLinkTable = ({
                                 variant="ghost"
                                 size="sm"
                                 className="h-7 p-0 w-7"
-                                onClick={() => copyToClipboard(link.token)}
+                                onClick={() => copyToClipboard(getClaimUrl(link.token))}
                               >
                                 <Copy className="h-3.5 w-3.5" />
                                 <span className="sr-only">Copy Token</span>
