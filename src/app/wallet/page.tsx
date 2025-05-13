@@ -61,7 +61,7 @@ export default function WalletPage() {
 
       setClaims(formattedClaims);
 
-      // Fetch tokens from blockchain that match POPtokens
+      // Fetch tokens from blockchain that match POP Tokens
       try {
         const tokensResponse = await fetch('/api/wallet/tokens', {
           credentials: 'include',
@@ -71,7 +71,7 @@ export default function WalletPage() {
           const tokensData = await tokensResponse.json();
           console.log('Token data:', tokensData);
 
-          // All tokens returned are now guaranteed to be POPtokens
+          // All tokens returned are now guaranteed to be POP Tokens
           const formattedTokens = (tokensData.tokens || []).map((token: any) => ({
             id: token.id,
             title: token.title,
@@ -88,7 +88,7 @@ export default function WalletPage() {
 
           // If we have no tokens, show a more helpful message
           if (formattedTokens.length === 0 && formattedClaims.length === 0) {
-            setError('Only compressed Token2022 POPtokens are displayed.');
+            setError('Only compressed Token2022 POP Tokens are displayed.');
           }
         } else {
           try {
@@ -97,7 +97,7 @@ export default function WalletPage() {
 
             // Check if errorData is empty or doesn't have a message
             if (!errorData || Object.keys(errorData).length === 0 || !errorData.message) {
-              setError(`Failed to load POPtokens (HTTP ${tokensResponse.status})`);
+              setError(`Failed to load POP Tokens (HTTP ${tokensResponse.status})`);
             } else if (tokensResponse.status === 401) {
               setError('Authentication required. Please reconnect your wallet.');
             } else {
@@ -108,7 +108,7 @@ export default function WalletPage() {
             if (tokensResponse.status === 401) {
               setError('Authentication required. Please reconnect your wallet.');
             } else {
-              setError(`Failed to load POPtokens (HTTP ${tokensResponse.status})`);
+              setError(`Failed to load POP Tokens (HTTP ${tokensResponse.status})`);
             }
           }
         }
@@ -180,7 +180,7 @@ export default function WalletPage() {
           subtitle={
             <div className="flex items-center">
               <Wallet className="h-5 w-5 mr-2 text-blue-500" />
-              <span>View your POPtokens</span>
+              <span>View your POP Tokens</span>
             </div>
           }
           backLink="/"
