@@ -19,6 +19,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Info } from 'lucide-react';
 import { Share } from '@/components/ui/share';
 import { notFound } from 'next/navigation';
+import { POPDetailSkeleton } from '@/components/pop/pop-detail-skeleton';
 
 // Define the POP type including status
 interface POP {
@@ -368,14 +369,7 @@ export default function POPDetailClientPage({ id }: POPDetailClientPageProps) {
   }, [id, isAuthenticated, pop]);
 
   if (isLoading) {
-    return (
-      <div className="container mx-auto py-10">
-        <div className="max-w-4xl mx-auto text-center">
-          <div className="animate-spin w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full mx-auto mb-4"></div>
-          <p className="text-neutral-600">Loading POP details...</p>
-        </div>
-      </div>
-    );
+    return <POPDetailSkeleton />;
   }
 
   if (error || !pop) {

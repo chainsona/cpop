@@ -21,26 +21,44 @@ export async function GET(request: NextRequest) {
     const walletAddress = auth.walletAddress;
     console.log(`Fetching claims for wallet: ${walletAddress.substring(0, 8)}...`);
 
+    // Get pagination parameters from query
+    const url = new URL(request.url);
+    const page = parseInt(url.searchParams.get('page') || '1');
+    const limit = parseInt(url.searchParams.get('limit') || '20');
+    const skip = (page - 1) * limit;
+
     try {
-      // Find claims for this wallet address
-      const claims = await prisma.pOPClaim.findMany({
-        where: {
-          walletAddress: walletAddress,
-        },
-        include: {
-          pop: {
-            select: {
-              id: true,
-              title: true,
-              description: true,
-              imageUrl: true,
+      // Use Promise.all to run queries in parallel for better performance
+      const [totalCount, claims] = await Promise.all([
+        // Count query - just get the total
+        prisma.pOPClaim.count({
+          where: {
+            walletAddress: walletAddress,
+          },
+        }),
+        
+        // Optimized data query with pagination
+        prisma.pOPClaim.findMany({
+          where: {
+            walletAddress: walletAddress,
+          },
+          include: {
+            pop: {
+              select: {
+                id: true,
+                title: true,
+                description: true,
+                imageUrl: true,
+              },
             },
           },
-        },
-        orderBy: {
-          createdAt: 'desc',
-        },
-      });
+          orderBy: {
+            createdAt: 'desc',
+          },
+          skip,
+          take: limit,
+        }),
+      ]);
 
       // Format the response
       const formattedClaims = claims.map(claim => ({
@@ -55,6 +73,12 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({
         claims: formattedClaims,
         count: formattedClaims.length,
+        pagination: {
+          total: totalCount,
+          page,
+          limit,
+          pages: Math.ceil(totalCount / limit),
+        }
       });
     } catch (error) {
       console.error('Error fetching wallet claims:', error);

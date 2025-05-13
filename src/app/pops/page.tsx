@@ -6,11 +6,12 @@ import { POPCard } from '@/components/pop/pop-card';
 import { EmptyState } from '@/components/pop/empty-state';
 import { PopItem } from '@/types/pop';
 import { fetchWithAuth } from '@/lib/api-client';
-import { Loader2, Plus, Award } from 'lucide-react';
+import { Plus, Award } from 'lucide-react';
 import { useWalletContext } from '@/contexts/wallet-context';
 import { Container } from '@/components/ui/container';
 import { PageHeader } from '@/components/ui/page-header';
 import { useRouter } from 'next/navigation';
+import { POPCardSkeletonList } from '@/components/pop/pop-card-skeleton';
 
 // Rate limiting - Track failed auth attempts
 const AUTH_FAILURE_COOLDOWN = 10000; // 10 seconds cooldown after auth failure
@@ -214,18 +215,6 @@ export default function POPListPage() {
     fetchPops();
   };
 
-  // Loading state
-  if (isLoading) {
-    return (
-      <Container>
-        <div className="py-10 flex flex-col items-center justify-center min-h-[50vh]">
-          <Loader2 className="h-8 w-8 animate-spin text-neutral-300 mb-4" />
-          <p className="text-neutral-500">Loading your POPs...</p>
-        </div>
-      </Container>
-    );
-  }
-
   // If not authenticated at this point, show nothing (we should have already redirected)
   if (!isAuthenticated) {
     return null;
@@ -276,10 +265,13 @@ export default function POPListPage() {
           </div>
         )}
 
+        {/* Loading state - show skeleton loaders */}
+        {isLoading && <POPCardSkeletonList count={3} />}
+
         {/* Show empty state when no POPs are found but user is authenticated */}
         {isConnected && isAuthenticated && !isLoading && pops.length === 0 ? (
           <EmptyState message="You haven't created any POPs yet. Click 'Create POP' to get started." />
-        ) : (
+        ) : !isLoading && pops.length > 0 && (
           <div className="space-y-6">
             {pops.map(pop => (
               <POPCard key={pop.id} pop={pop} />
@@ -296,7 +288,7 @@ export default function POPListPage() {
             buttonAction={() => {
               window.location.href = '/auth?returnUrl=/pops';
             }}
-            icon={<Loader2 className="h-8 w-8 text-neutral-400" />}
+            icon={<Award className="h-8 w-8 text-neutral-400" />}
           />
         )}
 

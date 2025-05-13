@@ -20,6 +20,7 @@ import Link from 'next/link';
 import { useWalletContext } from '@/contexts/wallet-context';
 import { WalletConnectButton } from '@/components/wallet/wallet-connect-button';
 import QRCode from 'react-qr-code';
+import { ClaimPageSkeleton } from '@/components/pop/claim-skeleton';
 
 interface POP {
   id: string;
@@ -232,17 +233,7 @@ export default function ClaimPage() {
   };
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center" style={{ height: viewportHeight }}>
-        <div className="w-full sm:max-w-md sm:border sm:rounded-lg sm:shadow-sm sm:bg-white sm:p-8 flex flex-col items-center justify-center p-6">
-          <CardTitle className="text-xl mb-2">Verifying Claim Link</CardTitle>
-          <CardDescription className="text-center mb-8">
-            Please wait while we verify your claim link...
-          </CardDescription>
-          <Loader2 className="h-12 w-12 text-blue-500 animate-spin" />
-        </div>
-      </div>
-    );
+    return <ClaimPageSkeleton viewportHeight={viewportHeight} />;
   }
 
   if (error || !claimStatus) {

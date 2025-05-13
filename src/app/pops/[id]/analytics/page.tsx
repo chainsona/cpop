@@ -31,6 +31,7 @@ import {
 } from 'recharts';
 import { toast } from 'sonner';
 import { ExportDataButton } from '@/components/analytics/export-data-button';
+import { AnalyticsSkeleton } from '@/components/pop/analytics/analytics-skeleton';
 
 // Define the analytics data interface
 interface AnalyticsData {
@@ -146,29 +147,7 @@ export default function POPAnalyticsPage() {
 
   // Loading state
   if (isLoading) {
-    return (
-      <div className="container mx-auto py-10">
-        <div className="max-w-4xl mx-auto">
-          <div className="mb-6">
-            <Link href={`/pops/${id}`}>
-              <Button variant="ghost" size="sm" className="gap-1">
-                <ArrowLeft className="h-4 w-4" />
-                Back to POP
-              </Button>
-            </Link>
-          </div>
-
-          <div className="mb-8">
-            <POPTabNav popId={id} />
-          </div>
-
-          <div className="text-center py-16">
-            <div className="animate-spin w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full mx-auto mb-4"></div>
-            <p className="text-neutral-600">Loading analytics data...</p>
-          </div>
-        </div>
-      </div>
-    );
+    return <AnalyticsSkeleton popId={id} />;
   }
 
   // Error state

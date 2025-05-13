@@ -10,6 +10,38 @@ interface Params {
   id: string;
 }
 
+// Efficient POP cache implementation
+class PopCache {
+  private cache = new Map<string, { data: any, expiry: number }>();
+  private readonly TTL = 60 * 1000; // 1-minute cache TTL
+  
+  get(id: string) {
+    const item = this.cache.get(id);
+    if (!item) return null;
+    
+    // Check if item is expired
+    if (item.expiry < Date.now()) {
+      this.cache.delete(id);
+      return null;
+    }
+    
+    return item.data;
+  }
+  
+  set(id: string, data: any) {
+    this.cache.set(id, {
+      data,
+      expiry: Date.now() + this.TTL
+    });
+  }
+  
+  invalidate(id: string) {
+    this.cache.delete(id);
+  }
+}
+
+const popCache = new PopCache();
+
 // Common function to validate image URLs
 async function validateImageUrl(imageUrl: string): Promise<boolean> {
   try {
@@ -37,7 +69,7 @@ async function validateImageUrl(imageUrl: string): Promise<boolean> {
 // Helper to check user authorization for a POP
 async function checkUserAuthorization(
   req: NextRequest,
-  popId: string
+  pop: any
 ): Promise<{ authorized: boolean; creatorId?: string }> {
   // Get user from session
   const session = await getServerSession(authOptions);
@@ -48,16 +80,6 @@ async function checkUserAuthorization(
 
   // If neither session nor wallet, user is not authorized
   if (!userId && !walletAddress) {
-    return { authorized: false };
-  }
-
-  // First, fetch the POP with its creator
-  const pop = await prisma.pop.findUnique({
-    where: { id: popId },
-    select: { creatorId: true, settings: { select: { visibility: true } } },
-  });
-
-  if (!pop) {
     return { authorized: false };
   }
 
@@ -75,6 +97,7 @@ async function checkUserAuthorization(
   if (walletAddress) {
     const user = await prisma.user.findUnique({
       where: { walletAddress },
+      select: { id: true }
     });
 
     if (user && pop.creatorId === user.id) {
@@ -89,18 +112,19 @@ async function checkUserAuthorization(
 // Get a single POP by ID
 async function getHandler(request: Request, { params }: { params: Promise<Params > }) {
   try {
-    const { id  } = await params;
+    const { id } = await params;
+    
+    // Check cache first
+    const cachedData = popCache.get(id);
+    if (cachedData) {
+      return NextResponse.json({ pop: cachedData });
+    }
 
-    // Fetch POP from database with optimized includes
-    // Only include minimal required data initially
-    const pop = await prisma.pop.findUnique({
-      where: { id: id },
+    // Use a single optimized query to fetch all needed data at once
+    const popWithRelations = await prisma.pop.findUnique({
+      where: { id },
       include: {
-        settings: {
-          select: {
-            visibility: true
-          }
-        },
+        settings: true,
         tokens: {
           select: {
             id: true,
@@ -108,55 +132,49 @@ async function getHandler(request: Request, { params }: { params: Promise<Params
             metadataUri: true,
             metadataUpdatedAt: true,
             updatedAt: true,
-          }
+          },
+          take: 1, // We only need the first token
         },
+        creator: {
+          select: {
+            id: true,
+            walletAddress: true,
+            name: true,
+            image: true,
+          }
+        }
       },
     });
 
-    if (!pop) {
+    if (!popWithRelations) {
       return NextResponse.json({ error: 'POP not found' }, { status: 404 });
     }
 
     // Check if user is authorized to view this POP
-    const { authorized } = await checkUserAuthorization(request as unknown as NextRequest, id);
+    const { authorized } = await checkUserAuthorization(request as unknown as NextRequest, popWithRelations);
 
     // If POP is not public and user is not authorized, deny access
-    if (!authorized && pop.settings?.visibility !== 'Public') {
+    if (!authorized && popWithRelations.settings?.visibility !== 'Public') {
       return NextResponse.json(
         { error: 'You do not have permission to view this POP' },
         { status: 403 }
       );
     }
 
-    // Fetch creator info separately only if needed
-    let creator = null;
-    if (pop.creatorId) {
-      creator = await prisma.user.findUnique({
-        where: { id: pop.creatorId },
-        select: {
-          id: true,
-          walletAddress: true,
-        },
-      });
-    }
-
-    // Find the token if it exists
-    const token = pop.tokens.length > 0 ? pop.tokens[0] : null;
+    // Find the token if it exists (we already limited to 1 token in the query)
+    const token = popWithRelations.tokens.length > 0 ? popWithRelations.tokens[0] : null;
 
     // Create a clean response
     const cleanedPop = {
-      ...pop,
-      token: token, // Add the token as a single object instead of an array
+      ...popWithRelations,
+      token,
       tokens: undefined, // Remove the tokens array
     };
 
-    // Add creator to the response
-    const popWithCreator = {
-      ...cleanedPop,
-      creator,
-    };
+    // Store in cache
+    popCache.set(id, cleanedPop);
 
-    return NextResponse.json({ pop: popWithCreator });
+    return NextResponse.json({ pop: cleanedPop });
   } catch (error) {
     console.error('Error fetching POP:', error);
 
@@ -175,16 +193,6 @@ async function putHandler(request: Request, { params }: { params: Promise<Params
   try {
     const { id  } = await params;
 
-    // Check authorization
-    const { authorized } = await checkUserAuthorization(request as unknown as NextRequest, id);
-
-    if (!authorized) {
-      return NextResponse.json(
-        { error: 'Unauthorized: You do not have permission to update this POP' },
-        { status: 403 }
-      );
-    }
-
     // Find the POP to make sure it exists
     const existingPop = await prisma.pop.findUnique({
       where: { id },
@@ -195,6 +203,16 @@ async function putHandler(request: Request, { params }: { params: Promise<Params
 
     if (!existingPop) {
       return NextResponse.json({ error: 'POP not found' }, { status: 404 });
+    }
+
+    // Check authorization
+    const { authorized } = await checkUserAuthorization(request as unknown as NextRequest, existingPop);
+
+    if (!authorized) {
+      return NextResponse.json(
+        { error: 'Unauthorized: You do not have permission to update this POP' },
+        { status: 403 }
+      );
     }
 
     // Parse the request body
@@ -244,6 +262,9 @@ async function putHandler(request: Request, { params }: { params: Promise<Params
         }
       });
 
+      // Invalidate cache for this POP
+      popCache.invalidate(id);
+
       return NextResponse.json({
         success: true,
         message: 'POP updated successfully',
@@ -279,16 +300,6 @@ async function deleteHandler(request: Request, { params }: { params: Promise<Par
   try {
     const { id  } = await params;
 
-    // Check authorization
-    const { authorized } = await checkUserAuthorization(request as unknown as NextRequest, id);
-
-    if (!authorized) {
-      return NextResponse.json(
-        { error: 'Unauthorized: You do not have permission to delete this POP' },
-        { status: 403 }
-      );
-    }
-
     // Find the POP to make sure it exists
     const existingPop = await prisma.pop.findUnique({
       where: { id },
@@ -298,10 +309,23 @@ async function deleteHandler(request: Request, { params }: { params: Promise<Par
       return NextResponse.json({ error: 'POP not found' }, { status: 404 });
     }
 
+    // Check authorization
+    const { authorized } = await checkUserAuthorization(request as unknown as NextRequest, existingPop);
+
+    if (!authorized) {
+      return NextResponse.json(
+        { error: 'Unauthorized: You do not have permission to delete this POP' },
+        { status: 403 }
+      );
+    }
+
     // Delete the POP from the database
     await prisma.pop.delete({
       where: { id },
     });
+
+    // Invalidate cache for this POP
+    popCache.invalidate(id);
 
     return NextResponse.json({
       success: true,

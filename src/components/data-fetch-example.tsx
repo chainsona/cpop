@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useSupabase } from '@/hooks/use-supabase';
 import { Button } from '@/components/ui/button';
+import { TableSkeleton, FormSkeleton } from '@/components/ui/skeletons';
 
 interface DataItem {
   id: string | number;
@@ -145,10 +146,13 @@ export function DataFetchExample({
         </div>
       )}
       
-      {loading && <p className="text-sm">Loading...</p>}
-      
-      {/* Data table */}
-      {data.length > 0 ? (
+      {/* Show skeleton loader while loading */}
+      {loading ? (
+        <TableSkeleton 
+          rows={5} 
+          columns={data.length > 0 ? Object.keys(data[0]).length : 4}
+        />
+      ) : data.length > 0 ? (
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
@@ -213,7 +217,11 @@ export function DataFetchExample({
       {/* New item form */}
       <div className="mt-6">
         <h3 className="text-lg font-medium mb-2">Add New Item</h3>
-        {renderForm(newItem, true)}
+        {loading ? (
+          <FormSkeleton />
+        ) : (
+          renderForm(newItem, true)
+        )}
       </div>
     </div>
   );

@@ -7,6 +7,7 @@ import { POPCard } from '@/components/pop/pop-card';
 import { PopItem } from '@/types/pop';
 import { Container } from '@/components/ui/container';
 import { PageTitle } from '@/components/ui/page-title';
+import { POPCardSkeletonList } from '@/components/pop/pop-card-skeleton';
 
 export default function ExplorerPage() {
   const [pops, setPops] = useState<PopItem[]>([]);
@@ -80,13 +81,8 @@ export default function ExplorerPage() {
           }
         />
 
-        {/* Loading state */}
-        {isLoading && (
-          <div className="text-center py-12">
-            <div className="animate-spin w-8 h-8 border-4 border-pink-600 border-t-transparent rounded-full mx-auto mb-4"></div>
-            <p className="text-neutral-600">Loading POPs...</p>
-          </div>
-        )}
+        {/* Loading state - Show skeleton */}
+        {isLoading && <POPCardSkeletonList count={4} />}
 
         {/* Error state */}
         {error && !isLoading && (

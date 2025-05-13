@@ -3,254 +3,254 @@ import { prisma } from '@/lib/db';
 
 type Params = Promise<{ id: string }>;
 
-// Simple in-memory cache for analytics data
-// Keys are POP IDs and values are analytics data with expiry time
-const analyticsCache = new Map<string, { data: any, expiry: number }>();
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutes in milliseconds
+// Enhanced in-memory cache with Redis-like LRU capability
+class AnalyticsCache {
+  private cache = new Map<string, { data: any, expiry: number, lastAccessed: number }>();
+  private readonly maxSize = 100; // Maximum number of items to keep in cache
+  private readonly TTL = 5 * 60 * 1000; // 5 minutes in milliseconds
+  
+  get(key: string) {
+    const now = Date.now();
+    const item = this.cache.get(key);
+    
+    if (!item) return null;
+    
+    // Check if item is expired
+    if (item.expiry < now) {
+      this.cache.delete(key);
+      return null;
+    }
+    
+    // Update last accessed time for LRU
+    item.lastAccessed = now;
+    return item.data;
+  }
+  
+  set(key: string, data: any) {
+    const now = Date.now();
+    
+    // If cache is at capacity, remove least recently used item
+    if (this.cache.size >= this.maxSize) {
+      let oldestKey = '';
+      let oldestAccess = Infinity;
+      
+      for (const [cacheKey, item] of this.cache.entries()) {
+        if (item.lastAccessed < oldestAccess) {
+          oldestAccess = item.lastAccessed;
+          oldestKey = cacheKey;
+        }
+      }
+      
+      if (oldestKey) this.cache.delete(oldestKey);
+    }
+    
+    this.cache.set(key, {
+      data,
+      expiry: now + this.TTL,
+      lastAccessed: now
+    });
+  }
+}
+
+const analyticsCache = new AnalyticsCache();
 
 // GET analytics data for a POP
 export async function GET(request: Request, { params }: { params: Promise<Params > }) {
   try {
     const { id } = await params;
-
+    
     // Check cache first
-    const now = Date.now();
     const cachedData = analyticsCache.get(id);
-    if (cachedData && cachedData.expiry > now) {
-      return NextResponse.json({ analyticsData: cachedData.data });
+    if (cachedData) {
+      return NextResponse.json({ analyticsData: cachedData });
     }
 
-    // Check if POP exists
-    const pop = await prisma.pop.findUnique({
-      where: { id },
-      select: { id: true, attendees: true },
-    });
+    try {
+      // First check if POP exists
+      const pop = await prisma.pop.findUnique({
+        where: { id },
+        select: { id: true, attendees: true },
+      });
 
-    if (!pop) {
-      return NextResponse.json({ error: 'POP not found' }, { status: 404 });
-    }
-
-    // Optimize query for distribution methods and associated claim data
-    // Use a single query for distribution methods with only the fields we need
-    const distributionMethods = await prisma.distributionMethod.findMany({
-      where: {
-        popId: id,
-        disabled: false, // Only include active methods
-      },
-      select: {
-        id: true,
-        type: true,
-        claimLinks: {
-          where: { claimed: true },
-          select: {
-            claimed: true,
-            claimedAt: true,
-          }
-        },
-        secretWord: {
-          select: {
-            claimCount: true,
-            maxClaims: true,
-          }
-        },
-        locationBased: {
-          select: {
-            claimCount: true,
-            maxClaims: true,
-            city: true,
-          }
-        },
-        airdrop: {
-          select: {
-            claimCount: true,
-            addresses: true,
-          }
-        }
-      },
-    });
-
-    // Calculate analytics data efficiently
-    let totalClaims = 0;
-    let claimsByMethod = [];
-    let claimsByDay: Record<string, number> = {};
-
-    for (const method of distributionMethods) {
-      let methodClaims = 0;
-      let methodName = '';
-
-      // Calculate claims based on distribution method type
-      if (method.type === 'ClaimLinks' && method.claimLinks?.length > 0) {
-        methodClaims = method.claimLinks.length;
-        methodName = 'Link';
-
-        // Process claims by day for this method
-        for (const link of method.claimLinks) {
-          if (link.claimedAt) {
-            const date = new Date(link.claimedAt).toISOString().split('T')[0];
-            claimsByDay[date] = (claimsByDay[date] || 0) + 1;
-          }
-        }
-      } else if (method.type === 'SecretWord' && method.secretWord) {
-        methodClaims = method.secretWord.claimCount;
-        methodName = 'Secret';
-
-        // For secret words, we don't have individual claim dates,
-        // so we'll distribute them evenly across the last 5 days for demo purposes
-        const daysWithClaims = 5;
-        if (methodClaims > 0) {
-          const today = new Date();
-          const claimsPerDay = Math.ceil(methodClaims / daysWithClaims);
-          for (let i = 0; i < daysWithClaims; i++) {
-            const date = new Date(today);
-            date.setDate(date.getDate() - i);
-            const dateStr = date.toISOString().split('T')[0];
-            claimsByDay[dateStr] =
-              (claimsByDay[dateStr] || 0) +
-              (i === daysWithClaims - 1
-                ? methodClaims - claimsPerDay * (daysWithClaims - 1)
-                : claimsPerDay);
-          }
-        }
-      } else if (method.type === 'LocationBased' && method.locationBased) {
-        methodName = `Location - ${method.locationBased.city}`;
-        methodClaims = method.locationBased.claimCount || 0;
-      } else if (method.type === 'Airdrop' && method.airdrop) {
-        // For Airdrops, there's no claiming - tokens are directly minted to recipients
-        methodName = 'Airdrop';
-        methodClaims = method.airdrop.claimCount || 0;
+      if (!pop) {
+        return NextResponse.json({ error: 'POP not found' }, { status: 404 });
       }
 
-      if (methodClaims > 0) {
-        claimsByMethod.push({
-          method: methodName,
-          count: methodClaims,
-        });
-        totalClaims += methodClaims;
-      }
-    }
-
-    // Calculate available claims in one efficient query
-    const availableClaimsQuery = await prisma.$transaction([
-      // Count total claim links
-      prisma.claimLink.count({
+      // Fetch distribution methods directly
+      const distributionMethods = await prisma.distributionMethod.findMany({
         where: {
-          distributionMethod: {
-            popId: id,
-          },
+          popId: id,
+          disabled: false,
         },
-      }),
-      // Sum max claims from other distribution methods
-      ...['SecretWord', 'LocationBased', 'Airdrop'].map(type => 
-        prisma.distributionMethod.findMany({
-          where: { 
-            popId: id, 
-            type: type as any
+        select: {
+          id: true,
+          type: true,
+          claimLinks: {
+            where: { claimed: true },
+            select: {
+              claimed: true,
+              claimedAt: true,
+            }
           },
-          select: {
-            secretWord: type === 'SecretWord' ? { select: { maxClaims: true } } : undefined,
-            locationBased: type === 'LocationBased' ? { select: { maxClaims: true } } : undefined,
-            airdrop: type === 'Airdrop' ? { select: { addresses: true } } : undefined,
+          secretWord: {
+            select: {
+              claimCount: true,
+              maxClaims: true,
+            }
+          },
+          locationBased: {
+            select: {
+              claimCount: true,
+              maxClaims: true,
+              city: true,
+            }
+          },
+          airdrop: {
+            select: {
+              claimCount: true,
+              addresses: true,
+            }
           }
-        })
-      )
-    ]);
+        },
+      });
 
-    // Process results from transaction
-    let availableClaims = availableClaimsQuery[0]; // Claim links count
-    
-    // Add max claims from other methods
-    const secretWordMethods = availableClaimsQuery[1] as any[];
-    const locationBasedMethods = availableClaimsQuery[2] as any[];
-    const airdropMethods = availableClaimsQuery[3] as any[];
-    
-    for (const method of secretWordMethods) {
-      if (method.secretWord?.maxClaims) {
-        availableClaims += method.secretWord.maxClaims;
+      // Calculate analytics data efficiently
+      let totalClaims = 0;
+      let availableClaims = 0;
+      let claimsByMethod: {method: string, count: number}[] = [];
+      let claimsByDay: Record<string, number> = {};
+
+      for (const method of distributionMethods) {
+        let methodClaims = 0;
+        let methodName = '';
+        let maxClaims = 0;
+
+        // Calculate claims based on distribution method type
+        if (method.type === 'ClaimLinks' && method.claimLinks?.length > 0) {
+          methodClaims = method.claimLinks.length;
+          methodName = 'Link';
+          maxClaims = method.claimLinks.length; // For links, max = claimed count
+
+          // Process claims by day for this method
+          for (const link of method.claimLinks) {
+            if (link.claimedAt) {
+              const date = new Date(link.claimedAt).toISOString().split('T')[0];
+              claimsByDay[date] = (claimsByDay[date] || 0) + 1;
+            }
+          }
+        } else if (method.type === 'SecretWord' && method.secretWord) {
+          methodClaims = method.secretWord.claimCount || 0;
+          methodName = 'Secret';
+          maxClaims = method.secretWord.maxClaims || 0;
+        } else if (method.type === 'LocationBased' && method.locationBased) {
+          methodName = `Location${method.locationBased.city ? ` - ${method.locationBased.city}` : ''}`;
+          methodClaims = method.locationBased.claimCount || 0;
+          maxClaims = method.locationBased.maxClaims || 0;
+        } else if (method.type === 'Airdrop' && method.airdrop) {
+          methodName = 'Airdrop';
+          methodClaims = method.airdrop.claimCount || 0;
+          maxClaims = method.airdrop.addresses?.length || 0;
+        }
+
+        if (methodClaims > 0) {
+          claimsByMethod.push({
+            method: methodName,
+            count: methodClaims,
+          });
+          totalClaims += methodClaims;
+        }
+        
+        availableClaims += maxClaims;
       }
-    }
-    
-    for (const method of locationBasedMethods) {
-      if (method.locationBased?.maxClaims) {
-        availableClaims += method.locationBased.maxClaims;
+      
+      // If maxClaims is not set, use supply from POP
+      if (availableClaims === 0 && pop.attendees) {
+        availableClaims = pop.attendees;
       }
-    }
-    
-    for (const method of airdropMethods) {
-      if (method.airdrop?.addresses) {
-        availableClaims += method.airdrop.addresses.length;
+
+      // Ensure we have at least the total claims
+      availableClaims = Math.max(availableClaims, totalClaims);
+
+      // Convert claimsByDay object to array and sort by date
+      const claimsByDayArray = Object.entries(claimsByDay)
+        .map(([date, count]) => ({
+          date,
+          count: count as number,
+        }))
+        .sort((a, b) => a.date.localeCompare(b.date));
+
+      // Find the most active day
+      let mostActiveDay = null;
+      let maxDailyClaims = 0;
+
+      for (const day of claimsByDayArray) {
+        if (day.count > maxDailyClaims) {
+          maxDailyClaims = day.count;
+          mostActiveDay = day.date;
+        }
       }
-    }
 
-    // If maxClaims is not set, use supply from POP
-    if (availableClaims === 0 && pop.attendees) {
-      availableClaims = pop.attendees;
-    }
+      // Find the top claim method
+      let topClaimMethod = null;
+      let topClaimCount = 0;
 
-    // Ensure we have at least the total claims
-    availableClaims = Math.max(availableClaims, totalClaims);
-
-    // Convert claimsByDay object to array and sort by date
-    const claimsByDayArray = Object.entries(claimsByDay)
-      .map(([date, count]) => ({
-        date,
-        count: count as number,
-      }))
-      .sort((a, b) => a.date.localeCompare(b.date));
-
-    // Find the most active day
-    let mostActiveDay = null;
-    let maxClaims = 0;
-
-    for (const day of claimsByDayArray) {
-      if (day.count > maxClaims) {
-        maxClaims = day.count;
-        mostActiveDay = day.date;
+      for (const method of claimsByMethod) {
+        if (method.count > topClaimCount) {
+          topClaimCount = method.count;
+          topClaimMethod = method.method;
+        }
       }
+
+      // Assemble the analytics data
+      const analyticsData = {
+        totalClaims,
+        availableClaims,
+        claimMethods: claimsByMethod,
+        claimsByDay: claimsByDayArray,
+        mostActiveDay: {
+          date: mostActiveDay,
+          count: maxDailyClaims,
+        },
+        topClaimMethod: {
+          method: topClaimMethod,
+          count: topClaimCount,
+          percentage: topClaimCount > 0 ? Math.round((topClaimCount / totalClaims) * 100) : 0,
+        },
+      };
+
+      // Store data in cache
+      analyticsCache.set(id, analyticsData);
+
+      return NextResponse.json({ analyticsData });
+    } catch (innerError) {
+      console.error('Specific analytics processing error:', innerError);
+      throw innerError; // Re-throw to be caught by outer catch
     }
-
-    // Find the top claim method
-    let topClaimMethod = null;
-    let topClaimCount = 0;
-
-    for (const method of claimsByMethod) {
-      if (method.count > topClaimCount) {
-        topClaimCount = method.count;
-        topClaimMethod = method.method;
-      }
-    }
-
-    // Assemble the analytics data
-    const analyticsData = {
-      totalClaims,
-      availableClaims,
-      claimMethods: claimsByMethod,
-      claimsByDay: claimsByDayArray,
-      mostActiveDay: {
-        date: mostActiveDay,
-        count: maxClaims,
-      },
-      topClaimMethod: {
-        method: topClaimMethod,
-        count: topClaimCount,
-        percentage: topClaimCount > 0 ? Math.round((topClaimCount / totalClaims) * 100) : 0,
-      },
-    };
-
-    // Store data in cache
-    analyticsCache.set(id, {
-      data: analyticsData,
-      expiry: now + CACHE_TTL
-    });
-
-    return NextResponse.json({ analyticsData });
   } catch (error) {
     console.error('Error fetching analytics data:', error);
     return NextResponse.json(
       {
         error: 'Failed to fetch analytics data',
         message: error instanceof Error ? error.message : 'An unknown error occurred',
+        stack: process.env.NODE_ENV === 'development' && error instanceof Error ? error.stack : undefined
       },
       { status: 500 }
     );
+  }
+}
+
+// Helper function to get display name for distribution method types
+function getMethodDisplayName(methodType: string): string {
+  switch (methodType) {
+    case 'ClaimLinks':
+      return 'Link';
+    case 'SecretWord':
+      return 'Secret';
+    case 'LocationBased':
+      return 'Location';
+    case 'Airdrop':
+      return 'Airdrop';
+    default:
+      return methodType;
   }
 }
