@@ -50,25 +50,6 @@ export function LocationBasedForm({ id, onSuccess }: LocationBasedFormProps) {
   const { modalState, openMintingModal, setMintSuccess, setMintError, onOpenChange } =
     usePOPMintModal();
 
-  // Function to check if token was minted
-  const checkTokenMinted = async (): Promise<{ minted: boolean; mintAddress?: string }> => {
-    try {
-      const response = await fetch(`/api/pops/${id}`);
-      if (!response.ok) {
-        throw new Error('Failed to check token status');
-      }
-
-      const data = await response.json();
-      return {
-        minted: !!data.pop.token,
-        mintAddress: data.pop.token?.mintAddress,
-      };
-    } catch (error) {
-      console.error('Error checking token status:', error);
-      return { minted: false };
-    }
-  };
-
   // Fetch POP details to get dates
   React.useEffect(() => {
     const fetchPopDetails = async () => {

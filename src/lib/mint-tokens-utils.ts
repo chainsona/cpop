@@ -1,6 +1,7 @@
 'use client';
 
 import { toast } from 'sonner';
+import { checkTokenMinted } from './token-utils';
 
 /**
  * Unified utility function to mint POP tokens
@@ -98,7 +99,7 @@ export async function mintPOPTokens({
 export async function pollForTokenMintStatus({
   popId,
   maxAttempts = 30,
-  intervalMs = 1000,
+  intervalMs = 500,
   onMinted,
   onTimeout,
   onProgress,
@@ -112,57 +113,19 @@ export async function pollForTokenMintStatus({
 }) {
   let attempts = 0;
 
-  // Check if token is minted
-  const checkTokenMinted = async () => {
-    try {
-      const attemptMessage = `Checking token status for POP ${popId} (attempt ${attempts + 1}/${maxAttempts})`;
-      console.log(attemptMessage);
-      if (onProgress) {
-        onProgress(attemptMessage);
-      }
-
-      const response = await fetch(`/api/pops/${popId}/token/status`, {
-        method: 'GET',
-        headers: {
-          'Cache-Control': 'no-cache, no-store',
-          Pragma: 'no-cache',
-          'If-None-Match': Math.random().toString(), // Add random value to prevent caching
-        },
-      });
-
-      // Handle specific status codes
-      if (response.status === 404) {
-        console.warn(
-          `Token status endpoint not found for POP ${popId}. This might be expected if the endpoint is still being deployed.`
-        );
-        return { minted: false, error: 'endpoint-not-found' };
-      }
-
-      if (!response.ok) {
-        console.error(
-          `Error response from token status check: ${response.status} ${response.statusText}`
-        );
-        return { minted: false, error: 'server-error' };
-      }
-
-      const data = await response.json();
-      console.log(`Token status response for POP ${popId}:`, data);
-
-      // If we get successful response but no minted status, consider it as not minted
-      if (data && typeof data.minted === 'boolean') {
-        return { minted: data.minted, mintAddress: data.mintAddress };
-      } else {
-        console.warn(`Unexpected token status response format for POP ${popId}:`, data);
-        return { minted: false, error: 'invalid-response' };
-      }
-    } catch (error) {
-      console.error('Error checking token mint status:', error);
-      return { minted: false, error: 'network-error' };
+  // Helper function to check token status with progress updates
+  const checkToken = async () => {
+    const attemptMessage = `Checking token status for POP ${popId} (attempt ${attempts + 1}/${maxAttempts})`;
+    console.log(attemptMessage);
+    if (onProgress) {
+      onProgress(attemptMessage);
     }
+
+    return await checkTokenMinted(popId, { endpoint: 'token/status' });
   };
 
   // Initial check
-  const initialStatus = await checkTokenMinted();
+  const initialStatus = await checkToken();
   if (initialStatus.minted) {
     console.log(`Token already minted for POP ${popId}`);
     if (onMinted) onMinted();
@@ -172,11 +135,11 @@ export async function pollForTokenMintStatus({
   // Set up polling with exponential backoff
   return new Promise<{ minted: boolean; mintAddress?: string }>(resolve => {
     let currentInterval = intervalMs;
-    const maxInterval = 3000; // Maximum interval of 3 seconds
+    const maxInterval = 1000; // Maximum interval of 3 seconds
 
     const interval = setInterval(async () => {
       attempts++;
-      const status = await checkTokenMinted();
+      const status = await checkToken();
 
       if (status.minted) {
         clearInterval(interval);
@@ -197,7 +160,7 @@ export async function pollForTokenMintStatus({
         setTimeout(() => {
           const newInterval = setInterval(async () => {
             attempts++;
-            const status = await checkTokenMinted();
+            const status = await checkToken();
 
             if (status.minted) {
               clearInterval(newInterval);
@@ -217,4 +180,147 @@ export async function pollForTokenMintStatus({
       }
     }, currentInterval);
   });
+}
+
+/**
+ * Unified function to handle the complete token minting flow:
+ * 1. Initial check if token is already minted
+ * 2. Mint the token if not already minted
+ * 3. Poll for confirmation of minting
+ * 
+ * @param options Configuration options for the minting process
+ * @returns Promise with the result of the operation
+ */
+export async function mintTokensAndPoll({
+  popId,
+  authenticate,
+  isAuthenticated,
+  onStart,
+  onMinted,
+  onError,
+  onProgress,
+  maxAttempts = 5,
+  intervalMs = 250,
+}: {
+  popId: string;
+  authenticate?: () => Promise<boolean>;
+  isAuthenticated?: boolean;
+  onStart?: () => void;
+  onMinted?: (data: { mintAddress?: string }) => void;
+  onError?: (error: string) => void;
+  onProgress?: (message: string) => void;
+  maxAttempts?: number;
+  intervalMs?: number;
+}): Promise<{ success: boolean; mintAddress?: string; error?: string }> {
+  try {
+    // Step 1: Signal that the process is starting
+    if (onStart) {
+      onStart();
+    }
+    
+    if (onProgress) {
+      onProgress('Checking if tokens are already minted...');
+    }
+    
+    // Step 2: Initial check if tokens already exist
+    const initialStatus = await checkTokenMinted(popId, { endpoint: 'token/status' });
+    
+    // If already minted, return success immediately
+    if (initialStatus.minted) {
+      if (onProgress) {
+        onProgress('Tokens already minted');
+      }
+      if (onMinted) {
+        onMinted({ mintAddress: initialStatus.mintAddress });
+      }
+      return { 
+        success: true, 
+        mintAddress: initialStatus.mintAddress 
+      };
+    }
+    
+    // Step 3: Tokens not minted, initiate minting
+    if (onProgress) {
+      onProgress('Initiating token minting...');
+    }
+    
+    // Only authenticate if needed and the function is provided
+    if (authenticate && isAuthenticated === false) {
+      const authSuccess = await authenticate();
+      if (!authSuccess) {
+        const errorMessage = 'Authentication failed. Please log in and try again.';
+        if (onError) onError(errorMessage);
+        return { success: false, error: errorMessage };
+      }
+    }
+    
+    // Mint tokens
+    const mintResult = await mintPOPTokens({
+      popId,
+      authenticate: authenticate || (() => Promise.resolve(true)),
+      isAuthenticated: isAuthenticated || false,
+      onMintStart: () => {
+        if (onProgress) onProgress('Minting tokens...');
+      },
+      onSuccess: (data) => {
+        if (onProgress) onProgress('Tokens minted, awaiting confirmation...');
+      },
+      onError
+    });
+    
+    if (!mintResult.success) {
+      // If direct mint failed but we have no specific error, try polling anyway
+      // as the backend might be processing the mint asynchronously
+      if (!mintResult.error) {
+        if (onProgress) {
+          onProgress('Mint status unclear, checking status...');
+        }
+      } else {
+        // If we have a specific error, report it but still try polling
+        if (onProgress) {
+          onProgress(`Mint reported error: ${mintResult.error}. Checking status anyway...`);
+        }
+      }
+    }
+    
+    // Step 4: Poll for confirmation of minting
+    if (onProgress) {
+      onProgress('Polling for token minting confirmation...');
+    }
+    
+    const pollResult = await pollForTokenMintStatus({
+      popId,
+      maxAttempts,
+      intervalMs,
+      onProgress,
+      onMinted: () => {
+        if (onMinted) {
+          onMinted({ mintAddress: pollResult.mintAddress });
+        }
+      },
+      onTimeout: () => {
+        if (onError) {
+          onError('Timeout waiting for token minting confirmation');
+        }
+      }
+    });
+    
+    return {
+      success: pollResult.minted,
+      mintAddress: pollResult.mintAddress,
+      error: pollResult.minted ? undefined : 'Timeout waiting for token minting confirmation'
+    };
+    
+  } catch (error) {
+    console.error('Error in mintTokensAndPoll:', error);
+    const errorMessage = error instanceof Error 
+      ? error.message 
+      : 'An unexpected error occurred during token minting';
+    
+    if (onError) {
+      onError(errorMessage);
+    }
+    
+    return { success: false, error: errorMessage };
+  }
 }

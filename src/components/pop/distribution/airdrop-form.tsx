@@ -29,6 +29,7 @@ import { Badge } from '@/components/ui/badge';
 import { POPMintModal } from '@/components/pop/pop-mint-modal';
 import { usePOPMintModal } from '@/hooks/use-pop-mint-modal';
 import { pollForTokenMintStatus } from '@/lib/mint-tokens-utils';
+import { checkTokenMinted } from '@/lib/token-utils';
 
 interface AirdropFormProps {
   id: string;
@@ -93,25 +94,6 @@ export function AirdropForm({ id, onSuccess }: AirdropFormProps) {
 
     fetchPopDetails();
   }, [id]);
-
-  // Function to check if token was minted
-  const checkTokenMinted = async (): Promise<{ minted: boolean; mintAddress?: string }> => {
-    try {
-      const response = await fetch(`/api/pops/${id}`);
-      if (!response.ok) {
-        throw new Error('Failed to check token status');
-      }
-
-      const data = await response.json();
-      return {
-        minted: !!data.pop.token,
-        mintAddress: data.pop.token?.mintAddress,
-      };
-    } catch (error) {
-      console.error('Error checking token status:', error);
-      return { minted: false };
-    }
-  };
 
   // Handle file import
   const handleFileImport = () => {
@@ -316,44 +298,17 @@ export function AirdropForm({ id, onSuccess }: AirdropFormProps) {
         setIsMinting(true);
         openMintingModal();
 
-        // Check if token is already minted from server-side
-        if (data.tokenMint?.success) {
-          // Delay to show the minting animation for at least a second
-          setTimeout(() => {
-            setMintSuccess();
-            setIsMinting(false);
+        // Check for token minting status
+        const initialStatus = await checkTokenMinted(id);
 
-            // Show success toast with link to token tab
-            toast.success(
-              <div className="flex flex-col gap-2">
-                <div>POP tokens minted successfully!</div>
-                <Link
-                  href={`/pops/${id}/token`}
-                  className="inline-flex items-center gap-1.5 text-sm font-medium underline"
-                >
-                  <Coins className="h-4 w-4" />
-                  View token details
-                </Link>
-              </div>
-            );
+        if (!initialStatus.minted) {
+          // If no token exists, show minting progress indicator
+          setMintProgress('Minting POP tokens...');
+          openMintingModal();
 
-            // Only refresh the page after mint is confirmed
-            router.refresh();
-
-            // Call the onSuccess callback if provided
-            if (onSuccess) {
-              onSuccess();
-            }
-          }, 1500);
-        } else {
-          // Need to mint token or check status
+          // Start polling for token minting
           pollForTokenMintStatus({
             popId: id,
-            maxAttempts: 10, // Increased attempts
-            intervalMs: 1000, // More frequent checks
-            onProgress: message => {
-              setMintProgress(message);
-            },
             onMinted: () => {
               setIsMinting(false);
               setMintSuccess();
@@ -372,7 +327,7 @@ export function AirdropForm({ id, onSuccess }: AirdropFormProps) {
                 </div>
               );
 
-              // Only refresh the page after mint is confirmed
+              // Refresh the page after token is minted successfully
               router.refresh();
 
               // Call the onSuccess callback if provided
@@ -380,66 +335,28 @@ export function AirdropForm({ id, onSuccess }: AirdropFormProps) {
                 onSuccess();
               }
             },
-            onTimeout: async () => {
-              // If timeout, attempt a direct mint
-              try {
-                setMintProgress('Timeout waiting for token minting. Attempting direct mint...');
-                const mintResponse = await fetch(`/api/pops/${id}/mint`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                });
+            onTimeout: () => {
+              setIsMinting(false);
+              setMintError('Timeout waiting for token minting');
+              console.log('Timeout waiting for token minting');
 
-                if (mintResponse.ok) {
-                  const mintData = await mintResponse.json();
-                  if (mintData.success) {
-                    setMintSuccess();
-                    toast.success('POP tokens minted successfully!');
+              // Refresh the page even if minting timed out
+              router.refresh();
 
-                    // Refresh page after direct mint succeeds
-                    router.refresh();
-
-                    // Call the onSuccess callback if provided
-                    if (onSuccess) {
-                      onSuccess();
-                    }
-                  } else {
-                    setMintError('Failed to mint tokens: ' + (mintData.error || 'Unknown error'));
-
-                    // Still refresh the page if the distribution was created but minting failed
-                    router.refresh();
-
-                    if (onSuccess) {
-                      onSuccess();
-                    }
-                  }
-                } else {
-                  setMintError('Failed to mint tokens: Server error');
-
-                  // Still refresh the page if the distribution was created but minting failed
-                  router.refresh();
-
-                  if (onSuccess) {
-                    onSuccess();
-                  }
-                }
-              } catch (error) {
-                console.error('Error in direct mint attempt:', error);
-                setMintError(
-                  'Failed to mint tokens: ' +
-                    (error instanceof Error ? error.message : 'Unknown error')
-                );
-
-                // Still refresh the page if the distribution was created but minting failed
-                router.refresh();
-
-                if (onSuccess) {
-                  onSuccess();
-                }
-              } finally {
-                setIsMinting(false);
+              if (onSuccess) {
+                onSuccess();
               }
             },
           });
+        } else {
+          setIsMinting(false);
+
+          // Token already exists, refresh the page
+          router.refresh();
+
+          if (onSuccess) {
+            onSuccess();
+          }
         }
       } else {
         // Regular token minting flow for non-first distribution methods
@@ -448,7 +365,7 @@ export function AirdropForm({ id, onSuccess }: AirdropFormProps) {
         setMintProgress('Checking if tokens need to be minted...');
 
         // Get initial token status
-        const initialStatus = await checkTokenMinted();
+        const initialStatus = await checkTokenMinted(id);
 
         if (!initialStatus.minted) {
           // If no token exists, show minting progress indicator

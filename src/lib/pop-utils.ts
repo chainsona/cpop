@@ -284,12 +284,28 @@ export async function mintTokensAfterDistributionCreated(popId: string): Promise
     const maxAttempts = 3;
     let lastError = null;
 
+    // Get cookies from server context if running server-side
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    
+    // Try to get the auth cookie from the request context if running server-side
+    if (typeof window === 'undefined' && typeof document === 'undefined' && process.env.NEXT_AUTH_SECRET) {
+      const { cookies } = require('next/headers');
+      const cookieStore = cookies();
+      const authToken = cookieStore.get('next-auth.session-token')?.value;
+      
+      if (authToken) {
+        headers['Cookie'] = `next-auth.session-token=${authToken}`;
+      }
+    }
+
     while (attempt < maxAttempts) {
       attempt++;
       try {
         console.log(`Attempt ${attempt}/${maxAttempts} to mint token for POP ${popId}`);
-        // Instead of calling the route handler, make a POST request to the API endpoint
-        const response = (await post(`/api/pops/${popId}/mint`, {})) as {
+        // Pass in headers with auth context
+        const response = (await post(`/api/pops/${popId}/mint`, {}, { headers })) as {
           success: boolean;
           message?: string;
           error?: string;

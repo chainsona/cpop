@@ -244,3 +244,78 @@ export async function getPOPsByMints(mintAddresses: string[]) {
     throw error;
   }
 }
+
+/**
+ * Utility function to check if a token has been minted for a POP
+ * Can be used in both client and server contexts
+ * @param popId The ID of the POP to check for token minting
+ * @param options Optional configuration for the API call
+ * @returns Object indicating if the token is minted and its mint address if available
+ */
+export async function checkTokenMinted(
+  popId: string,
+  options: {
+    credentials?: RequestCredentials;
+    headers?: HeadersInit;
+    endpoint?: 'pop' | 'token/status';
+  } = {}
+): Promise<{ minted: boolean; mintAddress?: string; error?: string }> {
+  try {
+    // Default to the POP endpoint, allow option for token/status endpoint
+    const endpoint = options.endpoint === 'token/status' ? 'token/status' : '';
+    
+    // Prepare headers with caching prevention if checking token status
+    const headers: HeadersInit = {
+      ...(options.endpoint === 'token/status' ? {
+        'Cache-Control': 'no-cache, no-store',
+        'Pragma': 'no-cache',
+        'If-None-Match': Math.random().toString(), // Prevent caching
+      } : {}),
+      ...(options.headers || {})
+    };
+
+    // Make the API call
+    const response = await fetch(`/api/pops/${popId}/${endpoint}`, {
+      method: 'GET',
+      headers,
+      credentials: options.credentials || 'include',
+    });
+
+    // Handle specific status codes
+    if (response.status === 404) {
+      console.warn(
+        `Token status endpoint not found for POP ${popId}. This might be expected if the endpoint is still being deployed.`
+      );
+      return { minted: false, error: 'endpoint-not-found' };
+    }
+
+    if (!response.ok) {
+      console.error(
+        `Error response from token status check: ${response.status} ${response.statusText}`
+      );
+      return { minted: false, error: 'server-error' };
+    }
+
+    const data = await response.json();
+    
+    // Different endpoints return different data structures
+    if (options.endpoint === 'token/status') {
+      // Token status API returns minted flag directly
+      if (data && typeof data.minted === 'boolean') {
+        return { minted: data.minted, mintAddress: data.mintAddress };
+      } else {
+        console.warn(`Unexpected token status response format for POP ${popId}:`, data);
+        return { minted: false, error: 'invalid-response' };
+      }
+    } else {
+      // POP API returns token object in pop.token
+      return {
+        minted: !!data.pop?.token,
+        mintAddress: data.pop?.token?.mintAddress,
+      };
+    }
+  } catch (error) {
+    console.error('Error checking token mint status:', error);
+    return { minted: false, error: 'network-error' };
+  }
+}

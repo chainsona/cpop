@@ -36,8 +36,22 @@ export async function fetchWithAuth(url: string, options: FetchOptions = {}): Pr
   // Get the Solana auth token if available - only in browser
   let solanaToken: string | null = null;
 
+  // Try to get token from localStorage in browser environment
   if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
     solanaToken = localStorage.getItem('solana_auth_token');
+  } 
+  // Try to get token from cookies in server environment
+  else if (options.headers && 'cookie' in options.headers) {
+    const cookieHeader = options.headers['cookie'] as string;
+    if (cookieHeader) {
+      const cookies = cookieHeader.split(';').reduce((acc, cookie) => {
+        const [key, value] = cookie.trim().split('=');
+        acc[key] = value;
+        return acc;
+      }, {} as Record<string, string>);
+      
+      solanaToken = cookies['solana_auth_token'] || null;
+    }
   }
 
   // Prepare the headers

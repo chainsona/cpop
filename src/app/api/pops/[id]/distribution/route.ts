@@ -302,7 +302,7 @@ async function postHandler(request: Request, { params }: { params: Promise<Param
             console.log('Attempting direct mint API call as fallback...');
             try {
               const directMintResponse = await fetch(
-                `${process.env.NEXT_PUBLIC_API_URL || ''}/api/pops/${popId}/mint`,
+                `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/pops/${popId}/mint`,
                 {
                   method: 'POST',
                   headers: {

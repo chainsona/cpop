@@ -12,7 +12,9 @@ import { Coins, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { POPMintModal } from '@/components/pop/pop-mint-modal';
 import { usePOPMintModal } from '@/hooks/use-pop-mint-modal';
-import { pollForTokenMintStatus } from '@/lib/mint-tokens-utils';
+import { mintTokensAndPoll } from '@/lib/mint-tokens-utils';
+import { checkTokenMinted } from '@/lib/token-utils';
+import { useWalletContext } from '@/contexts/wallet-context';
 
 interface ClaimLinksFormProps {
   id: string;
@@ -21,6 +23,7 @@ interface ClaimLinksFormProps {
 
 export function ClaimLinksForm({ id, onSuccess }: ClaimLinksFormProps) {
   const router = useRouter();
+  const { isAuthenticated, authenticate } = useWalletContext();
   const [step, setStep] = React.useState(1);
   const [amount, setAmount] = React.useState(0);
   const [expiryDate, setExpiryDate] = React.useState<Date | undefined>(undefined);
@@ -64,25 +67,6 @@ export function ClaimLinksForm({ id, onSuccess }: ClaimLinksFormProps) {
     fetchPopDetails();
   }, [id, expiryDate]);
 
-  // Function to check if token was minted
-  const checkTokenMinted = async (): Promise<{ minted: boolean; mintAddress?: string }> => {
-    try {
-      const response = await fetch(`/api/pops/${id}`);
-      if (!response.ok) {
-        throw new Error('Failed to check token status');
-      }
-
-      const data = await response.json();
-      return {
-        minted: !!data.pop.token,
-        mintAddress: data.pop.token?.mintAddress,
-      };
-    } catch (error) {
-      console.error('Error checking token status:', error);
-      return { minted: false };
-    }
-  };
-
   const handleSubmit = async () => {
     try {
       setIsSubmitting(true);
@@ -119,13 +103,22 @@ export function ClaimLinksForm({ id, onSuccess }: ClaimLinksFormProps) {
         setIsMinting(true);
         openMintingModal();
 
-        // Check if token is already minted from server-side
-        if (data.tokenMint?.success) {
-          // Delay to show the minting animation for at least a second
-          setTimeout(() => {
-            setMintSuccess();
+        // Use the new unified function to handle token minting flow
+        await mintTokensAndPoll({
+          popId: id,
+          authenticate,
+          isAuthenticated,
+          onStart: () => {
+            // Modal is already open, we just need to ensure the loading state is set
+            setIsMinting(true);
+          },
+          onProgress: (message) => {
+            setMintProgress(message);
+          },
+          onMinted: ({ mintAddress }) => {
             setIsMinting(false);
-
+            setMintSuccess();
+            
             // Show success toast with link to token tab
             toast.success(
               <div className="flex flex-col gap-2">
@@ -139,179 +132,40 @@ export function ClaimLinksForm({ id, onSuccess }: ClaimLinksFormProps) {
                 </Link>
               </div>
             );
-
-            // Only refresh the page after mint is confirmed
+            
+            // Refresh the page after tokens are minted
             router.refresh();
-
+            
             // Call the onSuccess callback if provided
             if (onSuccess) {
               onSuccess();
             }
-          }, 1500);
-        } else {
-          // Need to mint token or check status
-          pollForTokenMintStatus({
-            popId: id,
-            maxAttempts: 10, // Increased attempts
-            intervalMs: 1000, // More frequent checks
-            onProgress: message => {
-              setMintProgress(message);
-            },
-            onMinted: () => {
-              setIsMinting(false);
-              setMintSuccess();
-
-              // Show success toast with link to token tab
-              toast.success(
-                <div className="flex flex-col gap-2">
-                  <div>POP tokens minted successfully!</div>
-                  <Link
-                    href={`/pops/${id}/token`}
-                    className="inline-flex items-center gap-1.5 text-sm font-medium underline"
-                  >
-                    <Coins className="h-4 w-4" />
-                    View token details
-                  </Link>
-                </div>
-              );
-
-              // Only refresh the page after mint is confirmed
-              router.refresh();
-
-              // Call the onSuccess callback if provided
-              if (onSuccess) {
-                onSuccess();
-              }
-            },
-            onTimeout: async () => {
-              // If timeout, attempt a direct mint
-              try {
-                setMintProgress('Timeout waiting for token minting. Attempting direct mint...');
-                const mintResponse = await fetch(`/api/pops/${id}/mint`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  credentials: 'include',
-                });
-
-                if (mintResponse.ok) {
-                  const mintData = await mintResponse.json();
-                  if (mintData.success) {
-                    setMintSuccess();
-                    toast.success('POP tokens minted successfully!');
-
-                    // Refresh page after direct mint succeeds
-                    router.refresh();
-
-                    // Call the onSuccess callback if provided
-                    if (onSuccess) {
-                      onSuccess();
-                    }
-                  } else {
-                    setMintError('Failed to mint tokens: ' + (mintData.error || 'Unknown error'));
-
-                    // Still refresh the page if the distribution was created but minting failed
-                    router.refresh();
-
-                    if (onSuccess) {
-                      onSuccess();
-                    }
-                  }
-                } else {
-                  setMintError('Failed to mint tokens: Server error');
-
-                  // Still refresh the page if the distribution was created but minting failed
-                  router.refresh();
-
-                  if (onSuccess) {
-                    onSuccess();
-                  }
-                }
-              } catch (error) {
-                console.error('Error in direct mint attempt:', error);
-                setMintError(
-                  'Failed to mint tokens: ' +
-                    (error instanceof Error ? error.message : 'Unknown error')
-                );
-
-                // Still refresh the page if the distribution was created but minting failed
-                router.refresh();
-
-                if (onSuccess) {
-                  onSuccess();
-                }
-              } finally {
-                setIsMinting(false);
-              }
-            },
-          });
-        }
+          },
+          onError: (error) => {
+            setIsMinting(false);
+            setMintError(error);
+            
+            // Still refresh the page if the distribution was created but minting failed
+            router.refresh();
+            
+            if (onSuccess) {
+              onSuccess();
+            }
+          }
+        });
       } else {
         // Regular case for non-first distribution methods
-        // Check for token minting status (for non-first methods)
+        // Check token status and refresh page
         setIsMinting(true);
-        setMintProgress('Checking if tokens need to be minted...');
-
-        // Get initial token status
-        const initialStatus = await checkTokenMinted();
-
-        if (!initialStatus.minted) {
-          // If no token exists, show minting in progress indicator
-          setMintProgress('Minting POP tokens...');
-
-          // Poll for token creation (every 3 seconds for up to 30 seconds)
-          let attempts = 0;
-          const maxAttempts = 10;
-          const interval = setInterval(async () => {
-            attempts++;
-            const status = await checkTokenMinted();
-
-            if (status.minted) {
-              clearInterval(interval);
-              setIsMinting(false);
-
-              // Show success toast with link to token tab
-              toast.success(
-                <div className="flex flex-col gap-2">
-                  <div>POP tokens minted successfully!</div>
-                  <Link
-                    href={`/pops/${id}/token`}
-                    className="inline-flex items-center gap-1.5 text-sm font-medium underline"
-                  >
-                    <Coins className="h-4 w-4" />
-                    View token details
-                  </Link>
-                </div>
-              );
-
-              // Refresh the page after token is minted
-              router.refresh();
-
-              // Call the onSuccess callback if provided
-              if (onSuccess) {
-                onSuccess();
-              }
-            } else if (attempts >= maxAttempts) {
-              clearInterval(interval);
-              setIsMinting(false);
-              console.log('Timeout waiting for token minting');
-
-              // Refresh the page even if minting timed out
-              router.refresh();
-
-              if (onSuccess) {
-                onSuccess();
-              }
-            }
-          }, 3000);
-        } else {
-          setIsMinting(false);
-
-          // Refresh immediately if token was already minted
-          router.refresh();
-
-          if (onSuccess) {
-            onSuccess();
-          }
+        setMintProgress('Checking token status...');
+        
+        const tokenStatus = await checkTokenMinted(id);
+        setIsMinting(false);
+        
+        // Refresh page regardless of token status
+        router.refresh();
+        if (onSuccess) {
+          onSuccess();
         }
       }
     } catch (error) {
