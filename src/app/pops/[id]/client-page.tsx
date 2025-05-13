@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Pencil, FilePenLine, BookOpen, Award, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Pencil, FilePenLine, BookOpen, Award, AlertTriangle, XCircle, Trash2 } from 'lucide-react';
 import { POPTabNav } from '@/components/pop/pop-tab-nav';
 import { useEffect, useState } from 'react';
 import { usePageTitle } from '@/contexts/page-title-context';
@@ -31,7 +31,7 @@ interface POP {
   startDate: Date;
   endDate: Date;
   attendees: number | null;
-  status: 'Draft' | 'Published' | 'Distributed' | 'Unclaimable';
+  status: 'Draft' | 'Published' | 'Distributed' | 'Unclaimable' | 'Disabled' | 'Deleted';
   createdAt: Date;
   updatedAt: Date;
   token?: {
@@ -81,7 +81,7 @@ function getColorPaletteForId(id: string): (typeof COLOR_PALETTES)[0] {
 }
 
 // Get status display information
-function getStatusDisplay(status: 'Draft' | 'Published' | 'Distributed' | 'Unclaimable') {
+function getStatusDisplay(status: 'Draft' | 'Published' | 'Distributed' | 'Unclaimable' | 'Disabled' | 'Deleted') {
   switch (status) {
     case 'Draft':
       return {
@@ -114,6 +114,22 @@ function getStatusDisplay(status: 'Draft' | 'Published' | 'Distributed' | 'Uncla
         bgColor: 'bg-amber-100',
         borderColor: 'border-amber-200',
         icon: <AlertTriangle className="h-3.5 w-3.5" />,
+      };
+    case 'Disabled':
+      return {
+        label: 'Disabled',
+        color: 'text-red-600',
+        bgColor: 'bg-red-100',
+        borderColor: 'border-red-200',
+        icon: <XCircle className="h-3.5 w-3.5" />,
+      };
+    case 'Deleted':
+      return {
+        label: 'Deleted',
+        color: 'text-white',
+        bgColor: 'bg-neutral-700',
+        borderColor: 'border-neutral-800',
+        icon: <Trash2 className="h-3.5 w-3.5" />,
       };
   }
 }

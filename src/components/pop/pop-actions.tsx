@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { InteractiveExternalLink, InteractiveEditLink } from '@/components/ui/interactive-link';
 import { useWalletContext } from '@/contexts/wallet-context';
 import { useEffect, useState } from 'react';
+import { DeletePOPButton } from '@/components/DeletePOPButton';
 
 interface POPActionsProps {
   id: string;
@@ -45,16 +46,27 @@ export function POPActions({ id, title, website, creator }: POPActionsProps) {
 
       <div className="flex gap-2 relative z-20">
         {isCreator && (
-          <InteractiveEditLink
-            href={`/pops/${id}/edit`}
-            ariaLabel={`Edit ${title}`}
-            className="relative z-20"
-          >
-            <Button variant="outline" size="sm" className="gap-1.5">
-              <Pencil className="h-3.5 w-3.5" />
-              Edit
-            </Button>
-          </InteractiveEditLink>
+          <>
+            <InteractiveEditLink
+              href={`/pops/${id}/edit`}
+              ariaLabel={`Edit ${title}`}
+              className="relative z-20"
+            >
+              <Button variant="outline" size="sm" className="gap-1.5">
+                <Pencil className="h-3.5 w-3.5" />
+                Edit
+              </Button>
+            </InteractiveEditLink>
+            <DeletePOPButton 
+              popId={id} 
+              variant="outline" 
+              size="sm" 
+              onSuccess={() => {
+                // Force a refresh when deletion is successful
+                window.location.href = '/pops';
+              }}
+            />
+          </>
         )}
       </div>
     </div>

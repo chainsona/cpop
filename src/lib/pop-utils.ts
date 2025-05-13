@@ -141,7 +141,7 @@ export function getColorPaletteForId(id: string): ColorPalette {
 
 // Get status display information without JSX
 export function getStatusDisplay(
-  status: 'Draft' | 'Published' | 'Distributed' | 'Unclaimable'
+  status: 'Draft' | 'Published' | 'Distributed' | 'Unclaimable' | 'Disabled' | 'Deleted'
 ): Omit<StatusDisplay, 'icon'> & { iconName: string } {
   switch (status) {
     case 'Draft':
@@ -175,6 +175,22 @@ export function getStatusDisplay(
         bgColor: 'bg-amber-100',
         borderColor: 'border-amber-200',
         iconName: 'AlertTriangle',
+      };
+    case 'Disabled':
+      return {
+        label: 'Disabled',
+        color: 'text-red-600',
+        bgColor: 'bg-red-100',
+        borderColor: 'border-red-200',
+        iconName: 'XCircle',
+      };
+    case 'Deleted':
+      return {
+        label: 'Deleted',
+        color: 'text-white',
+        bgColor: 'bg-neutral-700',
+        borderColor: 'border-neutral-800',
+        iconName: 'Trash2',
       };
   }
 }

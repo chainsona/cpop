@@ -6,6 +6,7 @@ import { startOfDay, endOfDay } from 'date-fns';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { apiMiddleware } from '../middleware';
+import { PopStatus } from '@/generated/prisma';
 
 async function validateImageUrl(imageUrl: string): Promise<boolean> {
   try {
@@ -170,7 +171,12 @@ async function getHandler(request: NextRequest) {
     }
     
     // Build the query based on authentication
-    const where: any = {};
+    const where: any = {
+      // Filter out POPs with 'Deleted' status
+      status: {
+        not: PopStatus.Deleted
+      }
+    };
     
     if (userId) {
       // If authenticated with NextAuth, strictly filter by creator ID

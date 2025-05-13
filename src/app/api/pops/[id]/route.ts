@@ -319,9 +319,12 @@ async function deleteHandler(request: Request, { params }: { params: Promise<Par
       );
     }
 
-    // Delete the POP from the database
-    await prisma.pop.delete({
+    // Instead of deleting, update the POP status to "Deleted"
+    const updatedPop = await prisma.pop.update({
       where: { id },
+      data: {
+        status: 'Deleted',
+      },
     });
 
     // Invalidate cache for this POP

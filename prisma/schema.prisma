@@ -218,6 +218,7 @@ enum PopStatus {
   Distributed
   Unclaimable
   Disabled
+  Deleted
 }
 
 enum DistributionType {

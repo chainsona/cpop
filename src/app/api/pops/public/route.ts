@@ -13,19 +13,28 @@ export async function GET(request: NextRequest) {
     
     // Create optimized where clause
     const whereClause = {
-      OR: [
+      AND: [
         {
-          settings: {
-            is: {
-              visibility: Visibility.Public,
-            },
+          status: {
+            not: PopStatus.Deleted, // Filter out deleted POPs
           },
         },
         {
-          settings: null, // Include POPs with no settings (default to public)
-        },
-        {
-          status: PopStatus.Published,
+          OR: [
+            {
+              settings: {
+                is: {
+                  visibility: Visibility.Public,
+                },
+              },
+            },
+            {
+              settings: null, // Include POPs with no settings (default to public)
+            },
+            {
+              status: PopStatus.Published,
+            },
+          ],
         },
       ],
     };

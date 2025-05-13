@@ -1,6 +1,6 @@
-import { BookOpen, FilePenLine, Award, AlertTriangle, XCircle } from 'lucide-react';
+import { BookOpen, FilePenLine, Award, AlertTriangle, XCircle, Trash2 } from 'lucide-react';
 
-type POPStatus = 'Draft' | 'Published' | 'Distributed' | 'Unclaimable' | 'Disabled';
+type POPStatus = 'Draft' | 'Published' | 'Distributed' | 'Unclaimable' | 'Disabled' | 'Deleted';
 
 interface StatusDisplayInfo {
   label: string;
@@ -54,6 +54,14 @@ export function getStatusDisplay(status: POPStatus): StatusDisplayInfo {
         bgColor: 'bg-red-100',
         borderColor: 'border-red-200',
         icon: <XCircle className="h-3.5 w-3.5" />,
+      };
+    case 'Deleted':
+      return {
+        label: 'Deleted',
+        color: 'text-white',
+        bgColor: 'bg-neutral-700',
+        borderColor: 'border-neutral-800',
+        icon: <Trash2 className="h-3.5 w-3.5" />,
       };
   }
 }

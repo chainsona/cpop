@@ -16,6 +16,7 @@ export function POPCard({ pop, onClick, type = 'full' }: POPCardProps) {
     Draft: 'bg-neutral-100 text-neutral-800',
     Unclaimable: 'bg-amber-100 text-amber-800',
     Disabled: 'bg-red-100 text-red-800',
+    Deleted: 'bg-neutral-700 text-white',
   };
 
   if (type === 'compact') {
