@@ -37,10 +37,10 @@ const AlertDialogContent = React.forwardRef<
       ref={ref}
       className={cn(
         'fixed z-50 grid w-full gap-4 bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95',
-        // Mobile: fullscreen
-        'inset-0 border-0',
-        // Desktop: centered with max width and border
-        'sm:left-[50%] sm:top-[50%] sm:max-w-lg sm:translate-x-[-50%] sm:translate-y-[-50%] sm:rounded-lg sm:border sm:data-[state=closed]:slide-out-to-left-1/2 sm:data-[state=closed]:slide-out-to-top-[48%] sm:data-[state=open]:slide-in-from-left-1/2 sm:data-[state=open]:slide-in-from-top-[48%]',
+        // Mobile: centered with scrolling if needed
+        'left-[50%] top-[50%] max-h-[85vh] translate-x-[-50%] translate-y-[-50%] overflow-y-auto rounded-lg border',
+        // Desktop: centered with max width
+        'sm:max-w-lg sm:rounded-lg',
         className
       )}
       {...props}
