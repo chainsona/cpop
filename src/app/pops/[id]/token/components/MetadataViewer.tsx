@@ -2,7 +2,7 @@ import { FileText, AlertCircle, Info, Code } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Metadata } from '../types';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 
 interface MetadataViewerProps {
   metadata: Metadata | null;
@@ -17,19 +17,62 @@ export const MetadataViewer = ({
 }: MetadataViewerProps) => {
   const [showJsonView, setShowJsonView] = useState(false);
   const [isStableLoading, setIsStableLoading] = useState(isMetadataLoading);
+  
+  // Add refs to prevent excessive re-renders
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const prevLoadingState = useRef(isMetadataLoading);
+  const loadingChangeCount = useRef(0);
 
+  // Use useEffect with cleanup and delay to prevent rapid state changes
   useEffect(() => {
+    // Skip if the loading state hasn't actually changed
+    if (prevLoadingState.current === isMetadataLoading) {
+      return;
+    }
+    
+    // Update the previous loading state
+    prevLoadingState.current = isMetadataLoading;
+    
+    // Track number of changes to prevent excessive re-renders
+    loadingChangeCount.current += 1;
+    
+    // If we've had too many changes, bail out for a while
+    if (loadingChangeCount.current > 5) {
+      console.log('Too many loading state changes, stabilizing for 5 seconds');
+      // Set a timeout to reset the counter after a delay
+      setTimeout(() => {
+        loadingChangeCount.current = 0;
+      }, 5000);
+      return;
+    }
+    
+    // Clear any existing timer
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+    
     if (isMetadataLoading) {
       setIsStableLoading(true);
     } else {
-      const timer = setTimeout(() => {
+      // Use a longer delay to prevent flickering
+      timerRef.current = setTimeout(() => {
         setIsStableLoading(false);
-      }, 300);
-      return () => clearTimeout(timer);
+        timerRef.current = null;
+      }, 400);
     }
+    
+    // Cleanup on unmount
+    return () => {
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
+    };
   }, [isMetadataLoading]);
 
-  const renderContent = () => {
+  // Memoize content rendering to prevent re-renders
+  const renderedContent = useMemo(() => {
     if (isStableLoading) {
       return (
         <div className="text-center py-12">
@@ -235,41 +278,43 @@ export const MetadataViewer = ({
         )}
       </div>
     );
-  };
+  }, [isStableLoading, metadata, metadataError, showJsonView]);
+
+  // Use useCallback for toggle function to prevent unnecessary re-renders
+  const toggleJsonView = useCallback(() => {
+    setShowJsonView(prev => !prev);
+  }, []);
 
   return (
     <>
-      {/* Temporarily preventing Token Metadata loading because of re-render loop */}
-      {false && (
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-3">
-            <FileText className="h-6 w-6 text-blue-600" />
-            <h3 className="text-xl font-semibold">Token Metadata</h3>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-neutral-600 mr-1">Raw JSON</span>
-            <button
-              onClick={() => setShowJsonView(!showJsonView)}
-              className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none ${
-                showJsonView ? 'bg-blue-600' : 'bg-neutral-200'
-              }`}
-              aria-pressed={showJsonView}
-              aria-labelledby="json-toggle-label"
-              disabled={isStableLoading}
-            >
-              <span className="sr-only">Use setting</span>
-              <span
-                aria-hidden="true"
-                className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                  showJsonView ? 'translate-x-4' : 'translate-x-0'
-                }`}
-              />
-            </button>
-            <Code className="h-4 w-4 text-neutral-500" />
-          </div>
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-3">
+          <FileText className="h-6 w-6 text-blue-600" />
+          <h3 className="text-xl font-semibold">Token Metadata</h3>
         </div>
-      )}
-      {false && renderContent()}
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-neutral-600 mr-1">Raw JSON</span>
+          <button
+            onClick={toggleJsonView}
+            className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none ${
+              showJsonView ? 'bg-blue-600' : 'bg-neutral-200'
+            }`}
+            aria-pressed={showJsonView}
+            aria-labelledby="json-toggle-label"
+            disabled={isStableLoading}
+          >
+            <span className="sr-only">Use setting</span>
+            <span
+              aria-hidden="true"
+              className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                showJsonView ? 'translate-x-4' : 'translate-x-0'
+              }`}
+            />
+          </button>
+          <Code className="h-4 w-4 text-neutral-500" />
+        </div>
+      </div>
+      {renderedContent}
     </>
   );
 };

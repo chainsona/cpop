@@ -3,11 +3,13 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --turbopack",
+    "dev": "next dev",
+    "dev:turbo": "next dev --turbopack",
     "build": "next build && cp -r .next/static .next/standalone/.next/ && cp -r public .next/standalone/",
     "start": "next start",
     "lint": "next lint",
-    "setup-env": "node scripts/setup-env.js"
+    "setup-env": "node scripts/setup-env.js",
+    "clean": "rm -rf .next node_modules/.cache"
   },
   "dependencies": {
     "@bonfida/spl-name-service": "^3.0.10",

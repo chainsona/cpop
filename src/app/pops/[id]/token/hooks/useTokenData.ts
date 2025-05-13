@@ -16,8 +16,8 @@ export const useTokenData = (
   // Configuration
   // ----------------
   
-  // DISABLED: Completely disable token metadata loading as requested
-  const METADATA_LOADING_ENABLED = false;
+  // Enable token metadata loading
+  const METADATA_LOADING_ENABLED = true;
   
   // ----------------
   // State management
@@ -356,7 +356,7 @@ export const useTokenData = (
     }
   }, [id, hasValidToken]);
 
-  // Fetch metadata - DISABLED
+  // Fetch metadata
   const fetchMetadata = useCallback(
     async (forceRefresh = false): Promise<Metadata | null> => {
       // Skip all metadata loading if disabled
@@ -364,9 +364,6 @@ export const useTokenData = (
         console.log('Metadata loading is disabled, skipping fetch');
         return null;
       }
-      
-      // Rest of the existing fetchMetadata implementation 
-      // (keeping it for future use but it won't be called)
       
       // Skip if missing token data or not minted
       if (!hasValidToken()) {
@@ -383,7 +380,8 @@ export const useTokenData = (
       // Prevent redundant fetches (rate limiting)
       const now = Date.now();
       const timeSinceLastFetch = now - lastMetadataFetchTime.current;
-      if (timeSinceLastFetch < 5000 && !forceRefresh && metadataLoadAttempted.current) {
+      // Increase the minimum time between fetches to 8 seconds to reduce re-render issues
+      if (timeSinceLastFetch < 8000 && !forceRefresh && metadataLoadAttempted.current) {
         console.log(
           `Skipping metadata fetch - too soon (${timeSinceLastFetch}ms since last fetch)`
         );
@@ -406,17 +404,88 @@ export const useTokenData = (
       console.log(`Starting metadata fetch #${metadataUpdateCount.current + 1}`);
       
       try {
-        // Simulate successful completion since it's disabled
-        return null;
+        // Get auth token
+        const solanaToken = localStorage.getItem('solana_auth_token');
+        if (!solanaToken) {
+          throw new Error('Authentication token not found');
+        }
+        
+        // Make API call to fetch metadata
+        const response = await withTimeout(
+          fetch(`/api/pops/${id}/token/metadata`, {
+            headers: { 
+              Authorization: `Solana ${solanaToken}`,
+              'Cache-Control': 'no-cache'
+            },
+            cache: 'no-store'
+          }),
+          8000,
+          'Metadata fetch'
+        );
+        
+        // Validate response
+        await validateResponse(response, 'Failed to fetch metadata');
+        
+        // Parse response data
+        const data = await response.json();
+        
+        // Only update if data has changed
+        if (shouldUpdateMetadataState(data, null)) {
+          safeSetState(setMetadata, data);
+          safeSetState(setMetadataError, null);
+          
+          // Update cache
+          metadataCache.current = {
+            data,
+            error: null,
+            fetchTime: Date.now()
+          };
+          
+          // Mark as loaded
+          metadataLoaded.current = true;
+          metadataUpdateCount.current += 1;
+        }
+        
+        return data;
       } catch (error) {
         console.error('Error fetching metadata:', error);
+        
+        // Format error message
+        let errorMsg = 'Failed to load metadata';
+        if (error instanceof Error) {
+          errorMsg = error.message;
+        }
+        
+        // Only update error if changed
+        if (shouldUpdateMetadataState(null, errorMsg)) {
+          safeSetState(setMetadataError, errorMsg);
+          safeSetState(setMetadata, null);
+          
+          // Update cache
+          metadataCache.current = {
+            data: null,
+            error: errorMsg,
+            fetchTime: Date.now()
+          };
+        }
+        
         return null;
       } finally {
         fetchInProgress.current.metadata = false;
         updateLoadingState({ metadataLoading: false });
+        
+        // Check if another fetch was requested while this one was in progress
+        // Use a longer delay to prevent re-render loops
+        if (pendingMetadataFetch.current) {
+          pendingMetadataFetch.current = false;
+          // Schedule a new fetch with a longer delay
+          setTimeout(() => {
+            fetchMetadata(true).catch(console.error);
+          }, 2000); // Increased to 2 seconds
+        }
       }
     },
-    [id, metadata, tokenData, hasValidToken, hasMetadataUri]
+    [id, metadata, hasValidToken]
   );
 
   // Fetch distribution methods
@@ -595,7 +664,7 @@ export const useTokenData = (
     // Prevent multiple initializations
     if (initialLoadComplete.current) return;
     
-    console.log('Starting initial data load (metadata loading disabled)');
+    console.log('Starting initial data load' + (METADATA_LOADING_ENABLED ? ' with metadata' : ' (metadata loading disabled)'));
     
     // Data loading function
     const loadInitialData = async () => {
@@ -623,8 +692,15 @@ export const useTokenData = (
             console.error('Error loading blockchain data:', err)
           );
           
-          // Skip metadata fetching completely
-          console.log('Skipping metadata fetching as requested');
+          // Also fetch metadata if enabled
+          if (METADATA_LOADING_ENABLED) {
+            console.log('Fetching token metadata');
+            await fetchMetadata(true).catch(err =>
+              console.error('Error loading metadata:', err)
+            );
+          } else {
+            console.log('Skipping metadata fetching as requested');
+          }
         }
       } catch (error) {
         console.error('Error during initial data load:', error);
@@ -672,27 +748,27 @@ export const useTokenData = (
     // Data
     tokenData,
     blockchainData,
-    metadata: null, // Always return null for metadata since loading is disabled
+    metadata: metadata,
     hasDistributionMethods,
     
     // Loading states
     isLoading: loadingState.isLoading,
     isRefreshing: loadingState.isRefreshing,
     isBlockchainLoading: loadingState.blockchainDataLoading,
-    isMetadataLoading: false, // Always return false since loading is disabled
+    isMetadataLoading: loadingState.metadataLoading,
     isAnyOperationInProgress,
     
     // Errors
     error,
     blockchainError,
-    metadataError: null, // Always return null for metadata error
+    metadataError: metadataError,
     
     // Actions
     setError: (newError: string | null) => safeSetState(setError, newError),
     setIsLoading: (loading: boolean) => updateLoadingState({ isLoading: loading }),
     fetchTokenData,
     fetchBlockchainData,
-    fetchMetadata, // Keep the function but it will do nothing
+    fetchMetadata,
     handleMintTokens,
     handleManualRefresh: debouncedRefresh,
   };

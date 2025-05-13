@@ -112,11 +112,11 @@ export default function POPTokenPage() {
       setTimeout(() => {
         fetchTokenData()
           .then(() => {
-            console.log('Token data loaded, fetching metadata');
-            // Pass a single forceRefresh parameter
-            if (!isAnyOperationInProgress) {
-              return fetchMetadata(true);
-            }
+            console.log('Token data loaded');
+            // Comment out automatic metadata fetch to prevent re-render loops
+            // if (!isAnyOperationInProgress) {
+            //   return fetchMetadata(true);
+            // }
           })
           .catch(err => console.error('Error in data loading sequence:', err));
       }, 500);
@@ -126,7 +126,7 @@ export default function POPTokenPage() {
     return () => {
       hasAttemptedFetch.current = false;
     };
-  }, [isAuthenticated, fetchTokenData, fetchMetadata, isAnyOperationInProgress]);
+  }, [isAuthenticated, fetchTokenData]);
 
   // Add a proper wrapper for fetchTokenData that returns Promise<void>
   const handleFetchTokenData = useCallback(async (): Promise<void> => {
@@ -175,17 +175,20 @@ export default function POPTokenPage() {
       !refreshInterval // Only if we don't already have an interval
     ) {
       console.log('Setting up metadata refresh interval for "in preparation" state');
-      // Set up a refresh interval (every 15 seconds to reduce server load and flickering)
+      // Increasing refresh interval to prevent re-render loops
       refreshInterval = setInterval(() => {
         // Only refresh if no operation is in progress
         if (!isAnyOperationInProgress) {
           console.log('Auto-refreshing metadata (preparation state)');
-          // Force refresh with a single parameter
-          fetchMetadata(true).catch(err => console.error('Auto-refresh metadata error:', err));
+          // Comment out metadata fetch to prevent re-render loops, rely on full refresh instead
+          // fetchMetadata(true).catch(err => console.error('Auto-refresh metadata error:', err));
+          
+          // Use handleManualRefresh instead as it's safer and handles errors better
+          handleManualRefresh();
         } else {
           console.log('Skipping auto-refresh - operation in progress');
         }
-      }, 15000); // Increased to 15 seconds
+      }, 30000); // Increased to 30 seconds to reduce UI flickering and re-render issues
     }
 
     // Clean up interval on component unmount or when dependencies change
@@ -199,7 +202,6 @@ export default function POPTokenPage() {
     isAuthenticated,
     tokenData,
     metadataError,
-    fetchMetadata,
     handleManualRefresh,
     isRefreshing,
     isAnyOperationInProgress,
