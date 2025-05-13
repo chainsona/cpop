@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, ReactNode, useRef } from 'react';
 import { useConnection, useWallet } from '@solana/wallet-adapter-react';
 import { WalletAdapterNetwork, WalletError, WalletName } from '@solana/wallet-adapter-base';
 import { ConnectionProvider, WalletProvider } from '@solana/wallet-adapter-react';
@@ -25,6 +25,9 @@ type WalletContextType = {
   isConnected: boolean;
   connecting: boolean;
   walletAddress: string | null;
+  activeWalletAddress: string | null;  // New: actual connected wallet address
+  authWalletAddress: string | null;    // New: authenticated wallet address from session
+  hasWalletMismatch: boolean;          // New: flag for UI to show mismatch warning
   signMessage: (message: Uint8Array) => Promise<Uint8Array | null>;
   connect: (walletName?: WalletName) => Promise<void>;
   disconnect: () => Promise<void>;
@@ -45,6 +48,9 @@ const WalletContext = createContext<WalletContextType>({
   isConnected: false,
   connecting: false,
   walletAddress: null,
+  activeWalletAddress: null,
+  authWalletAddress: null,
+  hasWalletMismatch: false,
   signMessage: async () => null,
   connect: async () => {},
   disconnect: async () => {},
@@ -83,6 +89,26 @@ export function SolanaWalletProvider({ children }: { children: ReactNode }) {
   );
 }
 
+// Helper function to parse wallet address from token
+function extractWalletAddressFromToken(token: string): string | null {
+  try {
+    const parsedToken = JSON.parse(Buffer.from(token, 'base64').toString());
+    if (!parsedToken.message) return null;
+    
+    if (typeof parsedToken.message === 'string') {
+      // Extract from human-readable format
+      const addressMatch = parsedToken.message.match(/Wallet: (.+)/);
+      return addressMatch ? addressMatch[1] : null;
+    } else {
+      // Extract from JSON format
+      return parsedToken.message.address || null;
+    }
+  } catch (error) {
+    console.error('Error extracting wallet address from token:', error);
+    return null;
+  }
+}
+
 // The actual context implementation that uses the wallet adapter hooks
 function WalletContextContent({ children }: { children: ReactNode }) {
   const { connection } = useConnection();
@@ -101,50 +127,102 @@ function WalletContextContent({ children }: { children: ReactNode }) {
 
   const [isConnected, setIsConnected] = useState<boolean>(false);
   const [walletAddress, setWalletAddress] = useState<string | null>(null);
+  const [activeWalletAddress, setActiveWalletAddress] = useState<string | null>(null);
+  const [authWalletAddress, setAuthWalletAddress] = useState<string | null>(null);
+  const [hasWalletMismatch, setHasWalletMismatch] = useState<boolean>(false);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [autoAuthInProgress, setAutoAuthInProgress] = useState<boolean>(false);
   const [initialCheckDone, setInitialCheckDone] = useState<boolean>(false);
-
-  // Check for existing auth token on initial render/page load
+  const [sessionWalletAddress, setSessionWalletAddress] = useState<string | null>(null);
+  
+  // Attempt to load session wallet info on initial render
   useEffect(() => {
-    // Only run this effect once on mount
-    const checkExistingToken = async () => {
+    const loadSessionInfo = async () => {
       try {
-        console.log('Checking for existing auth token on page load');
-        const isAlreadyAuthenticated = await checkAuthenticationStatus();
-        if (isAlreadyAuthenticated) {
-          console.log('Found valid existing token on page load');
+        console.log('Checking for existing session on page load');
+        
+        // Check for token in different storage locations
+        const cookieToken = getCookie('solana_auth_token')?.toString();
+        const localToken = typeof localStorage !== 'undefined' 
+          ? localStorage.getItem('solana_auth_token') 
+          : null;
+        
+        const token = cookieToken || localToken;
+        
+        if (!token) {
+          console.log('No auth token found on page load');
+          setIsAuthenticated(false);
+          setInitialCheckDone(true);
+          return;
+        }
+        
+        // Validate token locally first
+        const isTokenValid = await validateTokenLocally(token.toString());
+        if (!isTokenValid) {
+          console.log('Token failed local validation, clearing invalid token');
+          clearAuthTokens();
+          setInitialCheckDone(true);
+          return;
+        }
+        
+        // Extract wallet address from token
+        const extractedAddress = extractWalletAddressFromToken(token.toString());
+        if (extractedAddress) {
+          console.log('Found valid session with wallet:', extractedAddress);
+          setSessionWalletAddress(extractedAddress);
+          setAuthWalletAddress(extractedAddress);
+          setWalletAddress(extractedAddress);
+          setIsConnected(true);
           setIsAuthenticated(true);
+          
+          // Sync token across storage mechanisms
+          syncTokenAcrossStorage(token.toString());
         } else {
-          console.log('No valid token found on page load');
+          console.log('Could not extract wallet address from token');
+          clearAuthTokens();
         }
       } catch (error) {
-        console.error('Error checking auth token on page load:', error);
+        console.error('Error loading session info:', error);
       } finally {
         setInitialCheckDone(true);
       }
     };
-
-    checkExistingToken();
+    
+    loadSessionInfo();
   }, []);
 
-  // Function to check if a token is valid
-  const isTokenValid = (token: string): boolean => {
+  // Function to check if a token is valid (local check only)
+  const validateTokenLocally = async (token: string): Promise<boolean> => {
     try {
       const parsedToken = JSON.parse(Buffer.from(token, 'base64').toString());
-      if (!parsedToken.message || !parsedToken.message.expirationTime) {
+      
+      // Check if the token has the necessary structure
+      if (!parsedToken.message || !parsedToken.signature) {
         return false;
       }
-      const expirationTime = new Date(parsedToken.message.expirationTime);
-      return expirationTime > new Date();
+      
+      // Extract and check expiration time
+      if (typeof parsedToken.message === 'string') {
+        // Human-readable format
+        const expiresMatch = parsedToken.message.match(/Expires: (.+)/);
+        if (!expiresMatch) return false;
+        
+        const expirationTime = new Date(expiresMatch[1] + 'Z');
+        return expirationTime > new Date();
+      } else {
+        // JSON format
+        if (!parsedToken.message.expirationTime) return false;
+        const expirationTime = new Date(parsedToken.message.expirationTime);
+        return expirationTime > new Date();
+      }
     } catch (error) {
       console.error('Error validating token:', error);
       return false;
     }
   };
-
-  // Validate stored auth token against API
-  const validateAuthToken = async (token: string): Promise<boolean> => {
+  
+  // Function to validate token with server
+  const validateTokenWithServer = async (token: string): Promise<boolean> => {
     try {
       // Format token correctly for the Authorization header
       let authHeader = token;
@@ -166,81 +244,91 @@ function WalletContextContent({ children }: { children: ReactNode }) {
     }
   };
 
-  // Check for stored auth token and validate
-  const checkAuthenticationStatus = async (): Promise<boolean> => {
+  // Ensure token is stored consistently across storage mechanisms
+  const syncTokenAcrossStorage = (token: string) => {
     try {
-      // Check for token in cookies and localStorage
+      // Store in localStorage if it doesn't exist there
+      if (typeof localStorage !== 'undefined' && !localStorage.getItem('solana_auth_token')) {
+        localStorage.setItem('solana_auth_token', token);
+      }
+      
+      // Store in cookie if it doesn't exist there
       const cookieToken = getCookie('solana_auth_token');
-      const localToken =
-        typeof localStorage !== 'undefined' ? localStorage.getItem('solana_auth_token') : null;
-
-      const token = cookieToken || localToken;
-
-      if (!token) {
-        console.log('No auth token found in cookies or localStorage');
-        setIsAuthenticated(false);
-        return false;
-      }
-
-      console.log('Auth token found, validating...');
-
-      // First do a quick local validation
-      if (!isTokenValid(token.toString())) {
-        // Token is invalid or expired, clean up
-        console.log('Token failed local validation (expired or invalid format)');
-        deleteCookie('solana_auth_token');
-        if (typeof localStorage !== 'undefined') {
-          localStorage.removeItem('solana_auth_token');
+      if (!cookieToken) {
+        // Parse token to get expiration
+        const parsedToken = JSON.parse(Buffer.from(token, 'base64').toString());
+        let expirationDate: Date;
+        
+        if (typeof parsedToken.message === 'string') {
+          const expiresMatch = parsedToken.message.match(/Expires: (.+)/);
+          expirationDate = expiresMatch 
+            ? new Date(expiresMatch[1] + 'Z') 
+            : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+        } else {
+          expirationDate = new Date(parsedToken.message.expirationTime || Date.now() + 7 * 24 * 60 * 60 * 1000);
         }
-        setIsAuthenticated(false);
-        return false;
+        
+        setCookie('solana_auth_token', token, {
+          expires: expirationDate,
+          path: '/',
+        });
       }
-
-      // If token passes local validation, verify with API
-      try {
-        const isValid = await validateAuthToken(token.toString());
-
-        if (!isValid) {
-          // Token failed server validation, clean up
-          console.log('Token failed server validation');
-          deleteCookie('solana_auth_token');
-          if (typeof localStorage !== 'undefined') {
-            localStorage.removeItem('solana_auth_token');
-          }
-          setIsAuthenticated(false);
-          return false;
-        }
-      } catch (apiError) {
-        console.error('API validation error:', apiError);
-        // On API error, still use local validation result
-        console.log('Using local validation result due to API error');
-      }
-
-      // Token is valid, ensure it's stored in both places
-      if (!cookieToken && localToken) {
-        console.log('Syncing token to cookies');
-        setCookie('solana_auth_token', localToken);
-      } else if (cookieToken && !localToken && typeof localStorage !== 'undefined') {
-        console.log('Syncing token to localStorage');
-        localStorage.setItem('solana_auth_token', cookieToken.toString());
-      }
-
-      console.log('Token validated successfully');
-      setIsAuthenticated(true);
-      return true;
     } catch (error) {
-      console.error('Error checking authentication status:', error);
-      return false;
+      console.error('Error syncing token across storage:', error);
     }
+  };
+  
+  // Clear all auth tokens from storage
+  const clearAuthTokens = () => {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.removeItem('solana_auth_token');
+    }
+    
+    deleteCookie('solana_auth_token');
+    
+    setSessionWalletAddress(null);
+    setAuthWalletAddress(null);
+    setHasWalletMismatch(false);
+    setIsAuthenticated(false);
   };
 
   // Update the state when the wallet connection changes
   useEffect(() => {
-    setIsConnected(connected);
-    setWalletAddress(publicKey?.toBase58() || null);
-
-    // Store wallet address in localStorage when connected
-    if (connected && publicKey) {
+    // Always track the active wallet address separately
+    setActiveWalletAddress(connected && publicKey ? publicKey.toBase58() : null);
+    
+    // If we have a session wallet address and we're authenticated but not connected with hardware wallet,
+    // we should still show as connected using the session wallet address
+    if (!connected && sessionWalletAddress && isAuthenticated) {
+      setIsConnected(true);
+      setWalletAddress(sessionWalletAddress);
+      setAuthWalletAddress(sessionWalletAddress);
+      setHasWalletMismatch(false); // No mismatch when only session wallet is present
+    } else if (connected && publicKey) {
+      const connectedAddress = publicKey.toBase58();
+      setIsConnected(true);
+      
+      // If we have a session wallet, prioritize it for the displayed wallet address
+      if (sessionWalletAddress && isAuthenticated) {
+        // Keep using the authenticated wallet address for the primary display
+        setWalletAddress(sessionWalletAddress);
+        setAuthWalletAddress(sessionWalletAddress);
+        
+        // Set wallet mismatch flag if wallet addresses differ
+        const isMismatch = sessionWalletAddress !== connectedAddress;
+        setHasWalletMismatch(isMismatch);
+        
+        if (isMismatch) {
+          console.log(`Wallet mismatch detected: Auth wallet (${sessionWalletAddress}) ≠ Connected wallet (${connectedAddress})`);
+        }
+      } else {
+        // No session, just use the connected wallet
+        setWalletAddress(connectedAddress);
+        setAuthWalletAddress(null);
+        setHasWalletMismatch(false);
+      }
+      
+      // Update user profile with the active wallet address for reference
       try {
         const userInfo = localStorage.getItem('userProfile');
         if (userInfo) {
@@ -249,36 +337,75 @@ function WalletContextContent({ children }: { children: ReactNode }) {
             'userProfile',
             JSON.stringify({
               ...user,
-              walletAddress: publicKey.toBase58(),
+              activeWalletAddress: connectedAddress,
+              // Keep the auth wallet address in the profile if available
+              authWalletAddress: sessionWalletAddress || connectedAddress,
             })
           );
         }
       } catch (error) {
         console.error('Failed to update user wallet info:', error);
       }
+    } else if (!connected && !sessionWalletAddress) {
+      // No connection at all
+      setIsConnected(false);
+      setWalletAddress(null);
+      setAuthWalletAddress(null);
+      setHasWalletMismatch(false);
     }
-  }, [connected, publicKey]);
+  }, [connected, publicKey, sessionWalletAddress, isAuthenticated]);
 
-  // Auto-authenticate when wallet connects
+  // Auto-authenticate when wallet connects (but only if not already authenticated)
   useEffect(() => {
-    // Automatically authenticate when wallet connects
     const handleAutoAuth = async () => {
-      // Only proceed if we have a connection but no authentication yet
-      // AND initial token check has completed
-      if (connected && publicKey && !isAuthenticated && !autoAuthInProgress && initialCheckDone) {
+      // Skip auto-auth if:
+      // 1. We're already authenticated via session
+      // 2. Auto-auth is already in progress
+      // 3. Initial session check hasn't completed 
+      if (
+        (isAuthenticated && sessionWalletAddress) || 
+        autoAuthInProgress || 
+        !initialCheckDone
+      ) {
+        return;
+      }
+      
+      // Only auto-authenticate if we have a hardware wallet connection
+      if (connected && publicKey) {
         setAutoAuthInProgress(true);
 
         try {
+          console.log('Connected wallet detected, checking authentication status');
+          
           // First check if we already have a valid token
-          const isAlreadyAuthenticated = await checkAuthenticationStatus();
-
-          if (!isAlreadyAuthenticated) {
-            // If no valid token exists, trigger authentication
-            console.log('No valid auth token found, initiating auto-authentication');
-            await authenticate();
-          } else {
-            console.log('User already has valid authentication token');
+          const cookieToken = getCookie('solana_auth_token')?.toString();
+          const localToken = typeof localStorage !== 'undefined' 
+            ? localStorage.getItem('solana_auth_token') 
+            : null;
+          
+          const token = cookieToken || localToken;
+          
+          if (token) {
+            const isValid = await validateTokenLocally(token) && 
+                           await validateTokenWithServer(token);
+            
+            if (isValid) {
+              console.log('Valid token exists, using existing authentication');
+              setIsAuthenticated(true);
+              
+              // Extract and set wallet address from token
+              const extractedAddress = extractWalletAddressFromToken(token);
+              if (extractedAddress) {
+                setSessionWalletAddress(extractedAddress);
+              }
+              
+              return;
+            }
           }
+          
+          // If no valid token exists or validation failed, initiate authentication
+          console.log('No valid token found, initiating wallet authentication');
+          await authenticate();
         } catch (error) {
           console.error('Auto-authentication error:', error);
         } finally {
@@ -288,21 +415,7 @@ function WalletContextContent({ children }: { children: ReactNode }) {
     };
 
     handleAutoAuth();
-  }, [connected, publicKey, isAuthenticated, initialCheckDone]);
-
-  // Also check authentication status whenever wallet status changes
-  useEffect(() => {
-    if (connected && initialCheckDone) {
-      checkAuthenticationStatus();
-    } else if (!connected && !initialCheckDone) {
-      // If wallet disconnects but we haven't done initial check yet, 
-      // don't clear authentication state since we might have a valid token
-      console.log('Wallet disconnected but deferring auth state decision until initial check completes');
-    } else if (!connected && initialCheckDone) {
-      // Only clear authentication if wallet disconnects and we've already done the initial check
-      setIsAuthenticated(false);
-    }
-  }, [connected, initialCheckDone]);
+  }, [connected, publicKey, isAuthenticated, initialCheckDone, sessionWalletAddress]);
 
   // Function to check if a page is protected
   const isProtectedPage = (path: string): boolean => {
@@ -314,9 +427,13 @@ function WalletContextContent({ children }: { children: ReactNode }) {
   // Connect to a wallet - this will open the wallet selection modal
   const connect = async () => {
     try {
+      // If we're already authenticated via session, we're considered connected
+      if (isAuthenticated && sessionWalletAddress) {
+        console.log('Already connected via session wallet');
+        return;
+      }
+      
       // The wallet modal will handle wallet selection
-      // No need to explicitly select a wallet here
-      // Instead, directly show the wallet modal
       console.log('Opening wallet modal from context');
       setVisible(true);
     } catch (error) {
@@ -325,19 +442,16 @@ function WalletContextContent({ children }: { children: ReactNode }) {
     }
   };
 
-  // Disconnect the wallet
+  // Disconnect the wallet and clear session
   const disconnect = async () => {
     try {
-      await adapterDisconnect();
+      // Disconnect the hardware wallet if connected
+      if (connected) {
+        await adapterDisconnect();
+      }
 
       // Clear auth tokens from localStorage and cookies
-      if (typeof localStorage !== 'undefined') {
-        localStorage.removeItem('solana_auth_token');
-      }
-      deleteCookie('solana_auth_token');
-
-      // Reset authentication state
-      setIsAuthenticated(false);
+      clearAuthTokens();
 
       // Check if we're on a protected page that requires authentication
       if (isProtectedPage(pathname)) {
@@ -353,26 +467,28 @@ function WalletContextContent({ children }: { children: ReactNode }) {
 
   // Authenticate with the wallet
   const authenticate = async (): Promise<boolean> => {
+    // If we're already authenticated via session, return true
+    if (isAuthenticated && sessionWalletAddress) {
+      console.log('Already authenticated via session wallet');
+      
+      // Check if there's a mismatch with the current wallet
+      if (connected && publicKey) {
+        const connectedAddress = publicKey.toBase58();
+        setHasWalletMismatch(sessionWalletAddress !== connectedAddress);
+      }
+      
+      return true;
+    }
+    
+    // We need a connected hardware wallet to authenticate
     if (!connected || !publicKey || !adapterSignMessage) {
       toast.error('Wallet not connected');
       return false;
     }
 
     try {
-      // Check if we already have a valid token
-      const isAlreadyAuthenticated = await checkAuthenticationStatus();
-      if (isAlreadyAuthenticated) {
-        console.log('Authentication skipped: Valid token already exists');
-        toast.success('Already authenticated');
-        return true;
-      }
-
-      console.log('No valid token found, requesting wallet signature...');
-      
       // Create a human-readable message for the wallet to sign
       const message = createSignatureMessage(publicKey.toBase58());
-
-      // Create a UTF-8 encoded message that the wallet can sign
       const encodedMessage = new TextEncoder().encode(message);
 
       // Ask the wallet to sign the message
@@ -401,11 +517,20 @@ function WalletContextContent({ children }: { children: ReactNode }) {
       const expiresDate = expiresMatch 
         ? new Date(expiresMatch[1] + 'Z') 
         : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+      
+      // Extract wallet address from the message
+      const extractedAddress = extractWalletAddressFromToken(token);
+      if (extractedAddress) {
+        setSessionWalletAddress(extractedAddress);
+        setAuthWalletAddress(extractedAddress);
+        setHasWalletMismatch(false); // No mismatch when we just authenticated
+      }
 
       // Store the token in localStorage and cookies
       if (typeof localStorage !== 'undefined') {
         localStorage.setItem('solana_auth_token', token);
       }
+      
       setCookie('solana_auth_token', token, {
         expires: expiresDate,
         path: '/',
@@ -439,9 +564,12 @@ function WalletContextContent({ children }: { children: ReactNode }) {
 
   // The context value we'll provide to consumers
   const contextValue: WalletContextType = {
-    isConnected,
+    isConnected: isConnected || (!!sessionWalletAddress && isAuthenticated),
     connecting,
-    walletAddress,
+    walletAddress: walletAddress || sessionWalletAddress,
+    activeWalletAddress, // Provide the actual connected wallet address
+    authWalletAddress,   // Provide the authenticated wallet address
+    hasWalletMismatch,   // Indicate if there's a mismatch between auth and connected wallets
     signMessage,
     connect,
     disconnect,

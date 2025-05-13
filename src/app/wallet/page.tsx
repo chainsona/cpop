@@ -10,18 +10,29 @@ import { POPTokenGrid } from '@/components/wallet/pop-token-grid';
 import { Container } from '@/components/ui/container';
 import { PageHeader } from '@/components/ui/page-header';
 import { toast } from 'sonner';
+import { WalletMismatchAlert } from '@/components/wallet/wallet-mismatch-alert';
 
 export default function WalletPage() {
   const [tokens, setTokens] = useState<POPTokenProps[]>([]);
   const [claims, setClaims] = useState<POPTokenProps[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { isConnected, isAuthenticated, walletAddress } = useWalletContext();
+  const { 
+    isConnected, 
+    isAuthenticated, 
+    walletAddress, 
+    hasWalletMismatch 
+  } = useWalletContext();
 
   // Debug logging
   useEffect(() => {
-    console.log('Wallet connection state:', { isConnected, isAuthenticated, walletAddress });
-  }, [isConnected, isAuthenticated, walletAddress]);
+    console.log('Wallet connection state:', { 
+      isConnected, 
+      isAuthenticated, 
+      walletAddress,
+      hasWalletMismatch
+    });
+  }, [isConnected, isAuthenticated, walletAddress, hasWalletMismatch]);
 
   // Load claimed POPs and blockchain tokens when the wallet is authenticated
   const fetchData = async () => {
@@ -194,6 +205,9 @@ export default function WalletPage() {
           backLink="/"
           backLabel="Back to Home"
         />
+
+        {/* Show wallet mismatch alert if applicable */}
+        {hasWalletMismatch && <WalletMismatchAlert />}
 
         <POPTokenGrid
           tokens={tokens}

@@ -2,7 +2,7 @@
 
 import { useWalletContext } from '@/contexts/wallet-context';
 import { Button } from '@/components/ui/button';
-import { Wallet, LogOut, Check, LogIn, Copy, Loader2 } from 'lucide-react';
+import { Wallet, LogOut, Check, LogIn, Copy, Loader2, AlertTriangle } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,9 +15,17 @@ import { useWallet } from '@solana/wallet-adapter-react';
 import { useWalletModal } from '@solana/wallet-adapter-react-ui';
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { truncateWalletAddress } from '@/lib/utils';
 
 export function WalletConnectButton() {
-  const { connecting, isAuthenticated, authenticate } = useWalletContext();
+  const { 
+    connecting, 
+    isAuthenticated, 
+    authenticate, 
+    hasWalletMismatch, 
+    authWalletAddress, 
+    activeWalletAddress 
+  } = useWalletContext();
   const { publicKey, disconnect } = useWallet();
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
@@ -25,9 +33,18 @@ export function WalletConnectButton() {
   // We can use the built-in wallet modal provided by @solana/wallet-adapter-react-ui
   const { setVisible } = useWalletModal();
 
-  // Truncate the wallet address for display
-  const truncatedAddress = publicKey 
-    ? `${publicKey.toString().slice(0, 4)}...${publicKey.toString().slice(-4)}`
+  // Get the address to display - prioritize authenticated address
+  const displayAddress = authWalletAddress || 
+                         (publicKey ? publicKey.toString() : null);
+  
+  // Truncate the wallet address for display 
+  const truncatedDisplayAddress = displayAddress 
+    ? truncateWalletAddress(displayAddress)
+    : null;
+    
+  // Also have the connected wallet address for showing both in case of mismatch
+  const truncatedConnectedAddress = publicKey && activeWalletAddress && hasWalletMismatch
+    ? truncateWalletAddress(activeWalletAddress)
     : null;
 
   // Handle manual authentication
@@ -43,11 +60,12 @@ export function WalletConnectButton() {
     }
   };
 
-  // Copy wallet address to clipboard
+  // Copy wallet address to clipboard - use auth address if available
   const copyToClipboard = async () => {
-    if (publicKey) {
+    const addressToCopy = displayAddress;
+    if (addressToCopy) {
       try {
-        await navigator.clipboard.writeText(publicKey.toString());
+        await navigator.clipboard.writeText(addressToCopy);
         setIsCopied(true);
         toast.success('Wallet address copied to clipboard');
         
@@ -60,7 +78,13 @@ export function WalletConnectButton() {
     }
   };
 
-  if (!publicKey) {
+  // Handle disconnecting
+  const handleDisconnect = () => {
+    disconnect();
+    toast.info('Wallet disconnected');
+  };
+
+  if (!publicKey && !authWalletAddress) {
     return (
       <Button
         variant="outline"
@@ -88,21 +112,40 @@ export function WalletConnectButton() {
       <DropdownMenuTrigger asChild>
         <Button 
           variant="outline" 
-          className={isAuthenticated 
-            ? "border-green-200 bg-green-50 text-green-700 hover:bg-green-100 flex items-center gap-2" 
-            : "flex items-center gap-2"
-          }
+          className={`flex items-center gap-2 ${
+            hasWalletMismatch 
+              ? "border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100" 
+              : isAuthenticated 
+                ? "border-green-200 bg-green-50 text-green-700 hover:bg-green-100" 
+                : ""
+          }`}
         >
           <Wallet className="h-4 w-4" />
-          {isAuthenticated && <Check className="h-3 w-3" />}
-          {truncatedAddress}
+          {hasWalletMismatch && <AlertTriangle className="h-3 w-3" />}
+          {isAuthenticated && !hasWalletMismatch && <Check className="h-3 w-3" />}
+          {truncatedDisplayAddress}
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         <DropdownMenuLabel>Solana Wallet</DropdownMenuLabel>
         <DropdownMenuItem disabled className="opacity-100 cursor-default">
-          {truncatedAddress} {isAuthenticated && <Check className="h-3 w-3 ml-2 text-green-600" />}
+          {truncatedDisplayAddress} {isAuthenticated && <Check className="h-3 w-3 ml-2 text-green-600" />}
+          {hasWalletMismatch && <AlertTriangle className="h-3 w-3 ml-2 text-amber-500" />}
         </DropdownMenuItem>
+        
+        {hasWalletMismatch && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem disabled className="opacity-90 cursor-default text-amber-700">
+              <AlertTriangle className="h-3 w-3 mr-2 text-amber-500" />
+              <span className="text-xs">
+                Connected to different wallet:<br/>
+                <span className="font-mono">{truncatedConnectedAddress}</span>
+              </span>
+            </DropdownMenuItem>
+          </>
+        )}
+        
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={copyToClipboard}>
           <Copy className="h-4 w-4 mr-2" />
@@ -116,7 +159,7 @@ export function WalletConnectButton() {
         )}
         <DropdownMenuSeparator />
         <DropdownMenuItem
-          onClick={() => disconnect()}
+          onClick={handleDisconnect}
           className="text-red-500 focus:bg-red-50 focus:text-red-600"
         >
           <LogOut className="h-4 w-4 mr-2" />
