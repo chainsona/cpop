@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { ArrowRight, KeyRound, Loader2, AlertTriangle } from 'lucide-react';
+import { ArrowRight, KeyRound, Loader2, AlertTriangle, Eye, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
 import { useWalletContext } from '@/contexts/wallet-context';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -21,6 +21,7 @@ export function ClaimWithSecret({ popId, popTitle }: ClaimWithSecretProps) {
   const [loading, setLoading] = useState(false);
   const [authLoading, setAuthLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
   const router = useRouter();
   const { isConnected, isAuthenticated, authenticate, walletAddress } = useWalletContext();
 
@@ -179,15 +180,24 @@ export function ClaimWithSecret({ popId, popTitle }: ClaimWithSecretProps) {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
+            <div className="relative">
               <Input
-                type="text"
+                type={showPassword ? "text" : "password"}
                 placeholder="Enter secret word"
                 value={secretWord}
                 onChange={e => setSecretWord(e.target.value)}
                 disabled={loading}
-                className="w-full"
+                className="w-full pr-10"
               />
+              <button
+                type="button"
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center justify-center text-gray-500 hover:text-gray-700 focus:outline-none"
+                onClick={() => setShowPassword(!showPassword)}
+                tabIndex={-1}
+                aria-label={showPassword ? "Hide password" : "Show password"}
+              >
+                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
               {error && <p className="text-sm text-red-500 mt-1">{error}</p>}
             </div>
             <Button type="submit" disabled={loading} className="w-full">

@@ -122,6 +122,20 @@ async function mintHandler(request: Request, { params }: { params: Promise<Param
       return NextResponse.json({ error: 'No active distribution methods found' }, { status: 400 });
     }
 
+    // Final check to prevent race conditions - check if token was created in parallel
+    const confirmedToken = await prisma.popToken.findFirst({
+      where: { popId },
+    });
+    
+    if (confirmedToken) {
+      console.log(`Token was created in parallel for POP ${popId}: ${confirmedToken.mintAddress}`);
+      return NextResponse.json({
+        success: true,
+        message: 'Tokens already minted (parallel process)',
+        mintAddress: confirmedToken.mintAddress,
+      });
+    }
+
     // Mint tokens
     try {
       let mintAddress = '';

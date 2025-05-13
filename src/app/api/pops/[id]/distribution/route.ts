@@ -285,47 +285,62 @@ async function postHandler(request: Request, { params }: { params: Promise<Param
     // If this is the first distribution method and no token exists, force token minting
     if (isFirstDistributionMethod || !existingToken) {
       try {
-        // Create token record with 0 supply
-        console.log(
-          `Minting token for POP ${popId} as part of first distribution method creation.`
-        );
-        mintResult = await mintTokensAfterDistributionCreated(popId);
-
-        if (mintResult?.success) {
-          console.log(`Token created successfully: ${mintResult.mintAddress}`);
+        // Check again if token exists (for race conditions)
+        const confirmedToken = await prisma.popToken.findFirst({
+          where: { popId },
+        });
+        
+        if (confirmedToken) {
+          console.log(`Token already exists for POP ${popId}: ${confirmedToken.mintAddress}`);
+          mintResult = {
+            success: true,
+            message: 'Tokens already minted',
+            mintAddress: confirmedToken.mintAddress,
+          };
           shouldShowMintModal = isFirstDistributionMethod;
         } else {
-          console.error('Failed to create token for POP');
+          // Create token record with 0 supply
+          console.log(
+            `Minting token for POP ${popId} as part of first distribution method creation.`
+          );
+          mintResult = await mintTokensAfterDistributionCreated(popId);
 
-          // Even if mintTokensAfterDistributionCreated fails, try direct API call as fallback
-          if (isFirstDistributionMethod) {
-            console.log('Attempting direct mint API call as fallback...');
-            try {
-              const directMintResponse = await fetch(
-                `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/pops/${popId}/mint`,
-                {
-                  method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/json',
-                  },
-                  body: JSON.stringify({}),
-                }
-              );
+          if (mintResult?.success) {
+            console.log(`Token created successfully: ${mintResult.mintAddress}`);
+            shouldShowMintModal = isFirstDistributionMethod;
+          } else {
+            console.error('Failed to create token for POP');
 
-              if (directMintResponse.ok) {
-                const directMintResult = await directMintResponse.json();
-                if (directMintResult.success) {
-                  mintResult = {
-                    success: true,
-                    mintAddress: directMintResult.mintAddress,
-                    message: 'Tokens minted successfully via fallback',
-                  };
-                  shouldShowMintModal = true;
-                  console.log('Fallback mint succeeded');
+            // Even if mintTokensAfterDistributionCreated fails, try direct API call as fallback
+            if (isFirstDistributionMethod) {
+              console.log('Attempting direct mint API call as fallback...');
+              try {
+                const directMintResponse = await fetch(
+                  `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/pops/${popId}/mint`,
+                  {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({}),
+                  }
+                );
+
+                if (directMintResponse.ok) {
+                  const directMintResult = await directMintResponse.json();
+                  if (directMintResult.success) {
+                    mintResult = {
+                      success: true,
+                      mintAddress: directMintResult.mintAddress,
+                      message: 'Tokens minted successfully via fallback',
+                    };
+                    shouldShowMintModal = true;
+                    console.log('Fallback mint succeeded');
+                  }
                 }
+              } catch (fallbackError) {
+                console.error('Fallback mint attempt also failed:', fallbackError);
               }
-            } catch (fallbackError) {
-              console.error('Fallback mint attempt also failed:', fallbackError);
             }
           }
         }

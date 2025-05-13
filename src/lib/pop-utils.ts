@@ -294,6 +294,21 @@ export async function mintTokensAfterDistributionCreated(popId: string): Promise
     } else {
       console.log(`Minting token for POP ${popId} (not first distribution method)`);
     }
+    
+    // Final check to see if a token was created in a parallel process (race condition)
+    const confirmedToken = await prisma.popToken.findFirst({
+      where: { popId },
+    });
+    
+    if (confirmedToken) {
+      console.log(`Token was created in parallel for POP ${popId}`, confirmedToken);
+      return {
+        success: true,
+        message: 'Tokens already minted (parallel process)',
+        mintAddress: confirmedToken.mintAddress,
+        tokenId: confirmedToken.id,
+      };
+    }
 
     // Make a POST request to the API endpoint with a maximum of 3 retries
     let attempt = 0;

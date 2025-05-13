@@ -13,7 +13,8 @@ import Link from 'next/link';
 import { LocationSearchFallback } from './location-search-fallback';
 import { POPMintModal } from '@/components/pop/pop-mint-modal';
 import { usePOPMintModal } from '@/hooks/use-pop-mint-modal';
-import { pollForTokenMintStatus } from '@/lib/mint-tokens-utils';
+import { pollForTokenMintStatus, mintTokensAndPoll } from '@/lib/mint-tokens-utils';
+import { checkTokenMinted } from '@/lib/token-utils';
 
 // Use fallback by default until Google Maps API key is properly configured
 const USE_FALLBACK = true;
@@ -92,51 +93,60 @@ export function LocationBasedForm({ id, onSuccess }: LocationBasedFormProps) {
     try {
       setIsSubmitting(true);
 
+      const payload = {
+        type: 'LocationBased',
+        city,
+        country,
+        radius: radius || 500, // Default to 500m if not set
+        latitude: latitude,
+        longitude: longitude,
+        maxClaims: maxClaims || null,
+        startDate: startDate?.toISOString(),
+        endDate: endDate?.toISOString(),
+      };
+
       const response = await fetch(`/api/pops/${id}/distribution`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        credentials: 'include',
-        body: JSON.stringify({
-          type: 'LocationBased',
-          city,
-          country: country || undefined,
-          latitude,
-          longitude,
-          radius,
-          maxClaims,
-          startDate: startDate?.toISOString(),
-          endDate: endDate?.toISOString(),
-        }),
+        body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to create location-based claim');
+        throw new Error(errorData.message || 'Failed to create location-based distribution');
       }
 
       const data = await response.json();
 
-      toast.success('Location-based claim created successfully');
+      toast.success('Location-based distribution created successfully');
 
-      // Always check if this is the first distribution method
+      // Check if this is the first distribution method
       const isFirstDistributionMethod =
         data.isFirstDistributionMethod || data.tokenMint?.shouldShowMintModal;
 
-      // If this is the first distribution method or we should specifically show the mint modal
       if (isFirstDistributionMethod) {
-        // Show minting modal immediately for first distribution method
+        // First method, show minting modal
         setIsMinting(true);
         openMintingModal();
 
-        // Check if token is already minted from server-side
-        if (data.tokenMint?.success) {
-          // Delay to show the minting animation for at least a second
-          setTimeout(() => {
-            setMintSuccess();
+        // Use the new unified function to handle token minting flow
+        await mintTokensAndPoll({
+          popId: id,
+          authenticate: () => Promise.resolve(true),
+          isAuthenticated: true,
+          onStart: () => {
+            // Modal is already open, we just need to ensure the loading state is set
+            setIsMinting(true);
+          },
+          onProgress: (message) => {
+            setMintProgress(message);
+          },
+          onMinted: ({ mintAddress }) => {
             setIsMinting(false);
-
+            setMintSuccess();
+            
             // Show success toast with link to token tab
             toast.success(
               <div className="flex flex-col gap-2">
@@ -150,125 +160,47 @@ export function LocationBasedForm({ id, onSuccess }: LocationBasedFormProps) {
                 </Link>
               </div>
             );
-
-            // Only refresh the page after mint is confirmed
+            
+            // Refresh the page after tokens are minted
             router.refresh();
-
+            
             // Call the onSuccess callback if provided
             if (onSuccess) {
               onSuccess();
             }
-          }, 1500);
-        } else {
-          // Need to mint token or check status
-          pollForTokenMintStatus({
-            popId: id,
-            maxAttempts: 10, // Increased attempts
-            intervalMs: 1000, // More frequent checks
-            onProgress: message => {
-              setMintProgress(message);
-            },
-            onMinted: () => {
-              setIsMinting(false);
-              setMintSuccess();
-
-              // Show success toast with link to token tab
-              toast.success(
-                <div className="flex flex-col gap-2">
-                  <div>POP tokens minted successfully!</div>
-                  <Link
-                    href={`/pops/${id}/token`}
-                    className="inline-flex items-center gap-1.5 text-sm font-medium underline"
-                  >
-                    <Coins className="h-4 w-4" />
-                    View token details
-                  </Link>
-                </div>
-              );
-
-              // Only refresh the page after mint is confirmed
-              router.refresh();
-
-              // Call the onSuccess callback if provided
-              if (onSuccess) {
-                onSuccess();
-              }
-            },
-            onTimeout: async () => {
-              // If timeout, attempt a direct mint
-              try {
-                setMintProgress('Timeout waiting for token minting. Attempting direct mint...');
-                const mintResponse = await fetch(`/api/pops/${id}/mint`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  credentials: 'include',
-                });
-
-                if (mintResponse.ok) {
-                  const mintData = await mintResponse.json();
-                  if (mintData.success) {
-                    setMintSuccess();
-                    toast.success('POP tokens minted successfully!');
-
-                    // Refresh page after direct mint succeeds
-                    router.refresh();
-
-                    // Call the onSuccess callback if provided
-                    if (onSuccess) {
-                      onSuccess();
-                    }
-                  } else {
-                    setMintError('Failed to mint tokens: ' + (mintData.error || 'Unknown error'));
-
-                    // Still refresh the page if the distribution was created but minting failed
-                    router.refresh();
-
-                    if (onSuccess) {
-                      onSuccess();
-                    }
-                  }
-                } else {
-                  setMintError('Failed to mint tokens: Server error');
-
-                  // Still refresh the page if the distribution was created but minting failed
-                  router.refresh();
-
-                  if (onSuccess) {
-                    onSuccess();
-                  }
-                }
-              } catch (error) {
-                console.error('Error in direct mint attempt:', error);
-                setMintError(
-                  'Failed to mint tokens: ' +
-                    (error instanceof Error ? error.message : 'Unknown error')
-                );
-
-                // Still refresh the page if the distribution was created but minting failed
-                router.refresh();
-
-                if (onSuccess) {
-                  onSuccess();
-                }
-              } finally {
-                setIsMinting(false);
-              }
-            },
-          });
-        }
+          },
+          onError: (error) => {
+            setIsMinting(false);
+            setMintError(error);
+            
+            // Still refresh the page if the distribution was created but minting failed
+            router.refresh();
+            
+            if (onSuccess) {
+              onSuccess();
+            }
+          }
+        });
       } else {
-        // For non-first methods, refresh the page immediately
+        // Regular case for non-first distribution methods
+        // Check token status and refresh page
+        setIsMinting(true);
+        setMintProgress('Checking token status...');
+        
+        const tokenStatus = await checkTokenMinted(id);
         setIsMinting(false);
+        
+        // Refresh page regardless of token status
         router.refresh();
-
-        // Call the onSuccess callback if provided
         if (onSuccess) {
           onSuccess();
         }
       }
     } catch (error) {
-      console.error('Error creating location-based claim:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to create location-based claim');
+      console.error('Error creating location-based distribution:', error);
+      toast.error(
+        error instanceof Error ? error.message : 'Failed to create location-based distribution'
+      );
       setIsMinting(false);
     } finally {
       setIsSubmitting(false);

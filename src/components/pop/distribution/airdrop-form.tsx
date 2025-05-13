@@ -28,7 +28,7 @@ import { Slider } from '@/components/ui/slider';
 import { Badge } from '@/components/ui/badge';
 import { POPMintModal } from '@/components/pop/pop-mint-modal';
 import { usePOPMintModal } from '@/hooks/use-pop-mint-modal';
-import { pollForTokenMintStatus } from '@/lib/mint-tokens-utils';
+import { pollForTokenMintStatus, mintTokensAndPoll } from '@/lib/mint-tokens-utils';
 import { checkTokenMinted } from '@/lib/token-utils';
 
 interface AirdropFormProps {
@@ -298,131 +298,69 @@ export function AirdropForm({ id, onSuccess }: AirdropFormProps) {
         setIsMinting(true);
         openMintingModal();
 
-        // Check for token minting status
-        const initialStatus = await checkTokenMinted(id);
-
-        if (!initialStatus.minted) {
-          // If no token exists, show minting progress indicator
-          setMintProgress('Minting POP tokens...');
-          openMintingModal();
-
-          // Start polling for token minting
-          pollForTokenMintStatus({
-            popId: id,
-            onMinted: () => {
-              setIsMinting(false);
-              setMintSuccess();
-
-              // Show success toast with link to token tab
-              toast.success(
-                <div className="flex flex-col gap-2">
-                  <div>POP tokens minted successfully!</div>
-                  <Link
-                    href={`/pops/${id}/token`}
-                    className="inline-flex items-center gap-1.5 text-sm font-medium underline"
-                  >
-                    <Coins className="h-4 w-4" />
-                    View token details
-                  </Link>
-                </div>
-              );
-
-              // Refresh the page after token is minted successfully
-              router.refresh();
-
-              // Call the onSuccess callback if provided
-              if (onSuccess) {
-                onSuccess();
-              }
-            },
-            onTimeout: () => {
-              setIsMinting(false);
-              setMintError('Timeout waiting for token minting');
-              console.log('Timeout waiting for token minting');
-
-              // Refresh the page even if minting timed out
-              router.refresh();
-
-              if (onSuccess) {
-                onSuccess();
-              }
-            },
-          });
-        } else {
-          setIsMinting(false);
-
-          // Token already exists, refresh the page
-          router.refresh();
-
-          if (onSuccess) {
-            onSuccess();
+        // Use the new unified function to handle token minting flow
+        await mintTokensAndPoll({
+          popId: id,
+          authenticate: () => Promise.resolve(true),
+          isAuthenticated: true,
+          onStart: () => {
+            // Modal is already open, we just need to ensure the loading state is set
+            setIsMinting(true);
+          },
+          onProgress: (message) => {
+            setMintProgress(message);
+          },
+          onMinted: ({ mintAddress }) => {
+            setIsMinting(false);
+            setMintSuccess();
+            
+            // Show success toast with link to token tab
+            toast.success(
+              <div className="flex flex-col gap-2">
+                <div>POP tokens minted successfully!</div>
+                <Link
+                  href={`/pops/${id}/token`}
+                  className="inline-flex items-center gap-1.5 text-sm font-medium underline"
+                >
+                  <Coins className="h-4 w-4" />
+                  View token details
+                </Link>
+              </div>
+            );
+            
+            // Refresh the page after tokens are minted
+            router.refresh();
+            
+            // Call the onSuccess callback if provided
+            if (onSuccess) {
+              onSuccess();
+            }
+          },
+          onError: (error) => {
+            setIsMinting(false);
+            setMintError(error);
+            
+            // Still refresh the page if the distribution was created but minting failed
+            router.refresh();
+            
+            if (onSuccess) {
+              onSuccess();
+            }
           }
-        }
+        });
       } else {
-        // Regular token minting flow for non-first distribution methods
-        // Check for token minting status
+        // Regular case for non-first distribution methods
+        // Check token status and refresh page
         setIsMinting(true);
-        setMintProgress('Checking if tokens need to be minted...');
-
-        // Get initial token status
-        const initialStatus = await checkTokenMinted(id);
-
-        if (!initialStatus.minted) {
-          // If no token exists, show minting progress indicator
-          setMintProgress('Minting POP tokens...');
-          openMintingModal();
-
-          // Start polling for token minting
-          pollForTokenMintStatus({
-            popId: id,
-            onMinted: () => {
-              setIsMinting(false);
-              setMintSuccess();
-
-              // Show success toast with link to token tab
-              toast.success(
-                <div className="flex flex-col gap-2">
-                  <div>POP tokens minted successfully!</div>
-                  <Link
-                    href={`/pops/${id}/token`}
-                    className="inline-flex items-center gap-1.5 text-sm font-medium underline"
-                  >
-                    <Coins className="h-4 w-4" />
-                    View token details
-                  </Link>
-                </div>
-              );
-
-              // Refresh the page after token is minted successfully
-              router.refresh();
-
-              // Call the onSuccess callback if provided
-              if (onSuccess) {
-                onSuccess();
-              }
-            },
-            onTimeout: () => {
-              setIsMinting(false);
-              setMintError('Timeout waiting for token minting');
-              console.log('Timeout waiting for token minting');
-
-              // Refresh the page even if minting timed out
-              router.refresh();
-
-              if (onSuccess) {
-                onSuccess();
-              }
-            },
-          });
-        } else {
-          setIsMinting(false);
-
-          // Token already exists, refresh the page
-          router.refresh();
-
-          if (onSuccess) {
-            onSuccess();
-          }
+        setMintProgress('Checking token status...');
+        
+        const tokenStatus = await checkTokenMinted(id);
+        setIsMinting(false);
+        
+        // Refresh page regardless of token status
+        router.refresh();
+        if (onSuccess) {
+          onSuccess();
         }
       }
     } catch (error) {
