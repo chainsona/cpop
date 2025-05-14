@@ -288,8 +288,7 @@ export default function ClaimPage() {
                 <h3 className="font-semibold text-lg mb-2">{claimStatus.pop.title}</h3>
                 <p className="text-sm text-neutral-600 mb-4">{claimStatus.pop.description}</p>
 
-                {/* QR code below description - hidden on mobile */}
-                <PopDisplay pop={claimStatus.pop} size={32} token={token} />
+                {/* QR code removed for claimed POPs */}
               </div>
             </div>
           )}
