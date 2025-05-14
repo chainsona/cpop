@@ -154,22 +154,24 @@ export function NavigationMenu({
             </details>
 
             {/* Logout Button */}
-            <div>
-              <Button
-                variant="outline"
-                className="w-full gap-2 text-sm text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
-                onClick={async () => {
-                  try {
-                    await handleLogout(externalOnClose);
-                  } catch (error) {
-                    console.error('Logout failed:', error);
-                  }
-                }}
-              >
-                <LogOut className="h-3.5 w-3.5" />
-                Log Out
-              </Button>
-            </div>
+            {isAuthenticated && (
+              <div>
+                <Button
+                  variant="outline"
+                  className="w-full gap-2 text-sm text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+                  onClick={async () => {
+                    try {
+                      await handleLogout(externalOnClose);
+                    } catch (error) {
+                      console.error('Logout failed:', error);
+                    }
+                  }}
+                >
+                  <LogOut className="h-3.5 w-3.5" />
+                  Log Out
+                </Button>
+              </div>
+            )}
           </div>
 
           {/* Right content area */}
