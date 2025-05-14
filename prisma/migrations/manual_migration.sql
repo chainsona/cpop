@@ -1,5 +1,5 @@
 -- CreateEnum
-CREATE TYPE "PopStatus" AS ENUM ('Draft', 'Published', 'Distributed', 'Unclaimable');
+CREATE TYPE "PopStatus" AS ENUM ('Draft', 'Published', 'Distributed', 'Active');
 
 -- CreateEnum
 CREATE TYPE "DistributionType" AS ENUM ('ClaimLinks', 'SecretWord', 'LocationBased', 'Airdrop');

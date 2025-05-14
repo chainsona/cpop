@@ -31,7 +31,7 @@ interface POP {
   startDate: Date;
   endDate: Date;
   attendees: number | null;
-  status: 'Draft' | 'Published' | 'Distributed' | 'Unclaimable' | 'Disabled' | 'Deleted';
+  status: 'Draft' | 'Published' | 'Distributed' | 'Active' | 'Disabled' | 'Deleted';
   createdAt: Date;
   updatedAt: Date;
   token?: {
@@ -81,7 +81,7 @@ function getColorPaletteForId(id: string): (typeof COLOR_PALETTES)[0] {
 }
 
 // Get status display information
-function getStatusDisplay(status: 'Draft' | 'Published' | 'Distributed' | 'Unclaimable' | 'Disabled' | 'Deleted') {
+function getStatusDisplay(status: 'Draft' | 'Published' | 'Distributed' | 'Active' | 'Disabled' | 'Deleted') {
   switch (status) {
     case 'Draft':
       return {
@@ -107,13 +107,13 @@ function getStatusDisplay(status: 'Draft' | 'Published' | 'Distributed' | 'Uncla
         borderColor: 'border-green-200',
         icon: <Award className="h-3.5 w-3.5" />,
       };
-    case 'Unclaimable':
+    case 'Active':
       return {
-        label: 'Unclaimable',
+        label: 'Active',
         color: 'text-amber-600',
         bgColor: 'bg-amber-100',
         borderColor: 'border-amber-200',
-        icon: <AlertTriangle className="h-3.5 w-3.5" />,
+        icon: <Award className="h-3.5 w-3.5" />,
       };
     case 'Disabled':
       return {

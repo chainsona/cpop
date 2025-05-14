@@ -74,7 +74,7 @@ interface Pop {
   title: string;
   description: string;
   imageUrl: string;
-  status: 'Draft' | 'Published' | 'Distributed' | 'Unclaimable';
+  status: 'Draft' | 'Published' | 'Distributed' | 'Active';
   token?: {
     id: string;
     mintAddress: string;

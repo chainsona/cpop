@@ -1,6 +1,7 @@
 import type { StatusDisplay, ColorPalette } from '@/types/pop';
 import { prisma } from '@/lib/db';
 import { post } from './api-client';
+import { PopStatus } from '@/generated/prisma';
 
 // Determine image type (external URL or base64)
 export function isBase64Image(url: string): boolean {
@@ -141,7 +142,7 @@ export function getColorPaletteForId(id: string): ColorPalette {
 
 // Get status display information without JSX
 export function getStatusDisplay(
-  status: 'Draft' | 'Published' | 'Distributed' | 'Unclaimable' | 'Disabled' | 'Deleted'
+  status: 'Draft' | 'Published' | 'Distributed' | 'Active' | 'Disabled' | 'Deleted'
 ): Omit<StatusDisplay, 'icon'> & { iconName: string } {
   switch (status) {
     case 'Draft':
@@ -155,9 +156,9 @@ export function getStatusDisplay(
     case 'Published':
       return {
         label: 'Published',
-        color: 'text-blue-600',
-        bgColor: 'bg-blue-100',
-        borderColor: 'border-blue-200',
+        color: 'text-yellow-600',
+        bgColor: 'bg-yellow-100',
+        borderColor: 'border-yellow-200',
         iconName: 'BookOpen',
       };
     case 'Distributed':
@@ -168,13 +169,13 @@ export function getStatusDisplay(
         borderColor: 'border-green-200',
         iconName: 'Award',
       };
-    case 'Unclaimable':
+    case 'Active':
       return {
-        label: 'Unclaimable',
-        color: 'text-amber-600',
-        bgColor: 'bg-amber-100',
-        borderColor: 'border-amber-200',
-        iconName: 'AlertTriangle',
+        label: 'Active',
+        color: 'text-blue-600',
+        bgColor: 'bg-blue-100',
+        borderColor: 'border-blue-200',
+        iconName: 'Award',
       };
     case 'Disabled':
       return {
@@ -198,7 +199,7 @@ export function getStatusDisplay(
 /**
  * Updates the POP status based on its distribution methods
  * - If at least one distribution method is active (not disabled and not deleted), set status to "Published"
- * - If there are distribution methods but all are disabled or deleted, set status to "Unclaimable"
+ * - If there are distribution methods but all are disabled or deleted, set status to "Active"
  * - Otherwise, keep the existing status
  */
 export async function updatePopStatusBasedOnDistributionMethods(popId: string): Promise<void> {
@@ -228,10 +229,10 @@ export async function updatePopStatusBasedOnDistributionMethods(popId: string): 
         data: { status: 'Published' },
       });
     } else {
-      // There are distribution methods but none are active - now we can use 'Unclaimable'
+      // There are distribution methods but none are active - now we can use 'Active'
       await prisma.pop.update({
         where: { id: popId },
-        data: { status: 'Unclaimable' },
+        data: { status: PopStatus.Active },
       });
     }
   } catch (error) {

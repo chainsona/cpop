@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import { AlertTriangle, Check, Info } from 'lucide-react';
+import { AlertTriangle, Check, Info, Award } from 'lucide-react';
 import { ClaimWithSecret } from './claim-with-secret';
 import { ClaimWithLocation } from './claim-with-location';
 import { useWalletContext } from '@/contexts/wallet-context';
@@ -309,8 +309,8 @@ export function POPClaimSection({ popId, title }: POPClaimSectionProps) {
       <Card className="border border-neutral-200 shadow-sm">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <AlertTriangle className="h-5 w-5 text-amber-500" />
-            Unclaimable
+            <Award className="h-5 w-5 text-amber-500" />
+            Active
           </CardTitle>
         </CardHeader>
         <CardContent>

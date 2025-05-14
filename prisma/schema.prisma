@@ -216,7 +216,7 @@ enum PopStatus {
   Draft
   Published
   Distributed
-  Unclaimable
+  Active
   Disabled
   Deleted
 }

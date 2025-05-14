@@ -1,6 +1,6 @@
 import { BookOpen, FilePenLine, Award, AlertTriangle, XCircle, Trash2 } from 'lucide-react';
 
-type POPStatus = 'Draft' | 'Published' | 'Distributed' | 'Unclaimable' | 'Disabled' | 'Deleted';
+type POPStatus = 'Draft' | 'Published' | 'Distributed' | 'Active' | 'Disabled' | 'Deleted';
 
 interface StatusDisplayInfo {
   label: string;
@@ -39,13 +39,13 @@ export function getStatusDisplay(status: POPStatus): StatusDisplayInfo {
         borderColor: 'border-green-200',
         icon: <Award className="h-3.5 w-3.5" />,
       };
-    case 'Unclaimable':
+    case 'Active':
       return {
-        label: 'Unclaimable',
+        label: 'Active',
         color: 'text-amber-600',
         bgColor: 'bg-amber-100',
         borderColor: 'border-amber-200',
-        icon: <AlertTriangle className="h-3.5 w-3.5" />,
+        icon: <Award className="h-3.5 w-3.5" />,
       };
     case 'Disabled':
       return {

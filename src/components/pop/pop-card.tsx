@@ -29,7 +29,7 @@ export function POPCard({ pop }: POPCardProps) {
       iconName: 'XCircle',
     };
   } else {
-    statusDisplay = getStatusDisplay(pop.status as 'Draft' | 'Published' | 'Distributed' | 'Unclaimable');
+    statusDisplay = getStatusDisplay(pop.status as 'Draft' | 'Published' | 'Distributed' | 'Active');
   }
 
   const { isAuthenticated, walletAddress } = useWalletContext();

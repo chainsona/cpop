@@ -1,2 +1,2 @@
 -- AlterEnum
-ALTER TYPE "PopStatus" ADD VALUE 'Unclaimable';
+ALTER TYPE "PopStatus" ADD VALUE 'Active';

@@ -14,7 +14,7 @@ export interface PopItem {
   startDate: Date;
   endDate: Date;
   attendees: number | null;
-  status: 'Draft' | 'Published' | 'Distributed' | 'Unclaimable' | 'Disabled' | 'Deleted';
+  status: 'Draft' | 'Published' | 'Distributed' | 'Active' | 'Disabled' | 'Deleted';
   distributionMethods?: DistributionMethod[];
   settings?: {
     visibility: 'Public' | 'Unlisted' | 'Private';
@@ -91,5 +91,5 @@ export interface POP {
   id: string;
   title: string;
   imageUrl: string;
-  status: 'Draft' | 'Published' | 'Distributed' | 'Unclaimable' | 'Disabled' | 'Deleted';
+  status: 'Draft' | 'Published' | 'Distributed' | 'Active' | 'Disabled' | 'Deleted';
 }

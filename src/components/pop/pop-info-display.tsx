@@ -23,7 +23,7 @@ interface POPInfoDisplayProps {
     title: string;
     startDate: Date | string;
     endDate: Date | string;
-    status: 'Draft' | 'Published' | 'Distributed' | 'Unclaimable' | 'Disabled' | 'Deleted';
+    status: 'Draft' | 'Published' | 'Distributed' | 'Active' | 'Disabled' | 'Deleted';
     website: string | null;
     token?: {
       id: string;
