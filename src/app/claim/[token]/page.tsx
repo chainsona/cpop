@@ -21,6 +21,7 @@ import { useWalletContext } from '@/contexts/wallet-context';
 import { WalletConnectButton } from '@/components/wallet/wallet-connect-button';
 import QRCode from 'react-qr-code';
 import { ClaimPageSkeleton } from '@/components/pop/claim-skeleton';
+import { SolanaPayQRCode } from '@/components/SolanaPayQRCode';
 
 interface POP {
   id: string;
@@ -49,56 +50,62 @@ const formatWalletAddress = (address: string | null): string => {
   return `${address.slice(0, 10)}...${address.slice(-10)}`;
 };
 
-// Component to conditionally render QR code or image based on viewport
+// Function to get a shortened URL value for QR codes
+const getShortenedQrValue = (pop: POP): string => {
+  // Use a shorter identifier - just the ID with a prefix
+  return `https://cpop.maikers.com/p/${pop.id}`;
+};
+
+// Component to render the Solana Pay QR code
 const PopDisplay = ({
   pop,
   size,
   className = '',
+  token,
 }: {
   pop: POP;
   size: number;
   className?: string;
+  token: string;
 }) => {
-  const [isDesktop, setIsDesktop] = useState(false);
-
-  useEffect(() => {
-    const checkViewport = () => {
-      setIsDesktop(window.innerWidth >= 640); // sm breakpoint
-    };
-
-    // Set initially
-    checkViewport();
-
-    // Update on resize
-    window.addEventListener('resize', checkViewport);
-
-    return () => {
-      window.removeEventListener('resize', checkViewport);
-    };
-  }, []);
-
-  // Ensure minimum size of 128px for both QR code and image
+  // Ensure minimum size for the QR code
   const displaySize = Math.max(size, 128);
 
   return (
-    <div
-      className={`relative rounded-xl overflow-hidden ${className}`}
-      style={{ width: `${displaySize}px`, height: `${displaySize}px` }}
-    >
-      {isDesktop ? (
-        // QR Code on desktop
-        <div className="w-full h-full flex items-center justify-center bg-white">
-          <QRCode
-            value={pop.imageUrl || `https://cpop.app/pop/${pop.id}`}
-            size={displaySize - 4} // Almost full size
-            className="mx-auto"
-          />
+    <div className={`${className} hidden sm:block`}>
+      <div className="flex flex-col items-center">
+        <div className="bg-white p-2 rounded-lg">
+          <SolanaPayQRCode claimToken={token} size={displaySize} className="w-full" />
         </div>
-      ) : // Image on mobile
-      pop.imageUrl ? (
-        <Image src={pop.imageUrl} alt={pop.title} fill className="object-cover" unoptimized />
+      </div>
+    </div>
+  );
+};
+
+// Simple component to display just the POP image
+const PopImage = ({
+  pop,
+  size = 100,
+  className = '',
+}: {
+  pop: POP;
+  size?: number;
+  className?: string;
+}) => {
+  return (
+    <div className={className}>
+      {pop.imageUrl ? (
+        <div
+          className="relative rounded-xl overflow-hidden"
+          style={{ width: `${size}px`, height: `${size}px` }}
+        >
+          <Image src={pop.imageUrl} alt={pop.title} fill className="object-cover" unoptimized />
+        </div>
       ) : (
-        <div className="w-full h-full bg-blue-50 flex items-center justify-center">
+        <div
+          className="bg-blue-50 flex items-center justify-center rounded-xl overflow-hidden"
+          style={{ width: `${size}px`, height: `${size}px` }}
+        >
           <Trophy
             style={{
               width: `${Math.floor(size / 3)}px`,
@@ -273,11 +280,16 @@ export default function ClaimPage() {
           </CardDescription>
 
           {claimStatus.pop && (
-            <div className="flex flex-col items-center space-y-4 mb-8">
-              {claimStatus.pop && <PopDisplay pop={claimStatus.pop} size={32} />}
+            <div className="flex flex-col items-center space-y-6 mb-8">
+              {/* Image at the top */}
+              <PopImage pop={claimStatus.pop} size={160} className="mx-auto shadow-sm rounded-xl" />
+
               <div className="text-center">
-                <h3 className="font-semibold text-lg">{claimStatus.pop.title}</h3>
-                <p className="text-sm text-neutral-600">{claimStatus.pop.description}</p>
+                <h3 className="font-semibold text-lg mb-2">{claimStatus.pop.title}</h3>
+                <p className="text-sm text-neutral-600 mb-4">{claimStatus.pop.description}</p>
+
+                {/* QR code below description - hidden on mobile */}
+                <PopDisplay pop={claimStatus.pop} size={32} token={token} />
               </div>
             </div>
           )}
@@ -324,11 +336,16 @@ export default function ClaimPage() {
           </CardDescription>
 
           {claimStatus.pop && (
-            <div className="flex flex-col items-center space-y-4 mb-8">
-              {claimStatus.pop && <PopDisplay pop={claimStatus.pop} size={32} />}
+            <div className="flex flex-col items-center space-y-6 mb-8">
+              {/* Image at the top */}
+              <PopImage pop={claimStatus.pop} size={160} className="mx-auto shadow-sm rounded-xl" />
+
               <div className="text-center">
-                <h3 className="font-semibold text-lg">{claimStatus.pop.title}</h3>
-                <p className="text-sm text-neutral-600">{claimStatus.pop.description}</p>
+                <h3 className="font-semibold text-lg mb-2">{claimStatus.pop.title}</h3>
+                <p className="text-sm text-neutral-600 mb-4">{claimStatus.pop.description}</p>
+
+                {/* QR code below description - hidden on mobile */}
+                <PopDisplay pop={claimStatus.pop} size={32} token={token} />
               </div>
             </div>
           )}
@@ -350,117 +367,124 @@ export default function ClaimPage() {
       <div className="flex-1 overflow-y-auto w-full sm:flex-initial sm:max-w-md sm:border sm:rounded-lg sm:shadow-sm sm:bg-white sm:overflow-hidden">
         <div className="p-6 pb-32 sm:pb-6">
           <div className="text-center mb-6">
-            <h1 className="text-2xl font-bold">Claim Your POP</h1>
+            <h1 className="hidden text-2xl font-bold">Claim Your POP</h1>
           </div>
 
           {claimStatus?.pop && (
-            <div className="flex flex-col">
-              <div className="flex flex-col items-center space-y-6 mb-8">
-                {claimStatus.pop && <PopDisplay pop={claimStatus.pop} size={40} />}
-                <div className="text-center">
-                  <h3 className="font-semibold text-xl">{claimStatus.pop.title}</h3>
-                  <p className="text-neutral-600 mt-1">{claimStatus.pop.description}</p>
-                  {claimStatus.pop.creatorName && (
-                    <p className="text-sm text-neutral-500 mt-2">
-                      Created by {claimStatus.pop.creatorName}
-                    </p>
+            <div className="flex flex-col items-center">
+              {/* Display the POP image at the top */}
+              <div className="flex justify-center mb-6">
+                <PopImage pop={claimStatus.pop} size={180} className="shadow-sm rounded-xl" />
+              </div>
+
+              <div className="text-center">
+                <h3 className="font-semibold text-xl mb-2">{claimStatus.pop.title}</h3>
+                <p className="text-neutral-600">{claimStatus.pop.description}</p>
+
+                {/* QR code now below the description */}
+                <div className="mt-6 mb-6">
+                  {claimStatus.pop && (
+                    <PopDisplay pop={claimStatus.pop} size={220} token={token} className="mb-4" />
                   )}
                 </div>
               </div>
+            </div>
+          )}
 
-              <div className="space-y-6">
-                {!isConnected ? (
-                  <div className="flex flex-col space-y-6">
-                    <div className="flex justify-center">
-                      <WalletConnectButton />
-                    </div>
-                    <div className="relative flex items-center justify-center">
-                      <div className="absolute inset-0 flex items-center">
-                        <span className="w-full border-t" />
-                      </div>
-                      <span className="relative px-2 text-xs text-neutral-500 bg-white">
-                        or enter wallet address manually
-                      </span>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="wallet">Your Solana Wallet Address</Label>
+          <div className="border-t mt-2 pt-6">
+            <div className="space-y-6">
+              {!isConnected ? (
+                <div className="flex flex-col space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="wallet" className="text-base">
+                      Your Solana Wallet Address
+                    </Label>
+                    <div className="flex flex-col sm:flex-row gap-3">
                       <Input
                         id="wallet"
                         type="text"
                         placeholder="Enter your wallet address"
                         value={walletAddress}
                         onChange={e => setWalletAddress(e.target.value)}
+                        className="font-mono text-sm flex-1"
+                        required
+                      />
+                      <WalletConnectButton className="w-full sm:w-auto" />
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Connect your wallet or enter an address manually
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  <div className="flex items-center p-4 bg-neutral-50 rounded-md border border-neutral-200">
+                    <div className="flex items-center gap-3 w-full">
+                      <Wallet className="h-6 w-6 flex-shrink-0 text-neutral-500" />
+                      <div className="space-y-1 min-w-0 flex-1">
+                        <p className="font-medium">Connected Wallet</p>
+                        <p className="text-sm font-mono text-neutral-500">
+                          {formatWalletAddress(connectedWalletAddress)}
+                          <span className="sr-only">{connectedWalletAddress}</span>
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {!useManualAddress ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full"
+                      onClick={() => setUseManualAddress(true)}
+                    >
+                      Use a different wallet address
+                    </Button>
+                  ) : (
+                    <div className="space-y-3">
+                      <Label htmlFor="manual-wallet">Alternative Wallet Address</Label>
+                      <Input
+                        id="manual-wallet"
+                        type="text"
+                        placeholder="Enter a different wallet address"
+                        value={walletAddress}
+                        onChange={e => setWalletAddress(e.target.value)}
                         className="font-mono text-sm"
                         required
                       />
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-6">
-                    <div className="flex items-center p-4 bg-neutral-50 rounded-md border border-neutral-200">
-                      <div className="flex items-center gap-3 w-full">
-                        <Wallet className="h-6 w-6 flex-shrink-0 text-neutral-500" />
-                        <div className="space-y-1 min-w-0 flex-1">
-                          <p className="font-medium">Connected Wallet</p>
-                          <p className="text-sm font-mono text-neutral-500">
-                            {formatWalletAddress(connectedWalletAddress)}
-                            <span className="sr-only">{connectedWalletAddress}</span>
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-
-                    {!useManualAddress ? (
                       <Button
                         type="button"
-                        variant="outline"
+                        variant="ghost"
                         className="w-full"
-                        onClick={() => setUseManualAddress(true)}
+                        onClick={() => {
+                          setUseManualAddress(false);
+                          setWalletAddress(connectedWalletAddress || '');
+                        }}
                       >
-                        Use a different wallet address
+                        Use connected wallet
                       </Button>
-                    ) : (
-                      <div className="space-y-3">
-                        <Label htmlFor="manual-wallet">Alternative Wallet Address</Label>
-                        <Input
-                          id="manual-wallet"
-                          type="text"
-                          placeholder="Enter a different wallet address"
-                          value={walletAddress}
-                          onChange={e => setWalletAddress(e.target.value)}
-                          className="font-mono text-sm"
-                          required
-                        />
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          className="w-full"
-                          onClick={() => {
-                            setUseManualAddress(false);
-                            setWalletAddress(connectedWalletAddress || '');
-                          }}
-                        >
-                          Use connected wallet
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                )}
+                    </div>
+                  )}
+                </div>
+              )}
 
-                <p className="text-sm text-neutral-500">
-                  Make sure this is a valid Solana wallet address. The POP will be minted directly
-                  to this address.
-                </p>
-              </div>
+              <p className="text-sm text-neutral-500">
+                Make sure this is a valid Solana wallet address. The POP will be minted directly to
+                this address.
+              </p>
             </div>
-          )}
+          </div>
         </div>
       </div>
 
       {/* Fixed bottom claim button - only fixed on mobile */}
-      <div className="fixed sm:static bottom-0 left-0 right-0 p-4 sm:p-0 sm:mt-4 sm:max-w-md sm:w-full bg-white border-t sm:border-t-0 border-neutral-200 z-10">
+      <div className="fixed sm:static bottom-0 left-0 right-0 p-4 sm:p-0 sm:mt-4 sm:max-w-md sm:w-full bg-white border-t sm:border-t-0 border-neutral-200 z-10 shadow-md sm:shadow-none">
         <form onSubmit={handleClaim}>
-          <Button type="submit" className="w-full py-6 sm:py-4 text-base" disabled={isClaiming}>
+          <Button
+            type="submit"
+            className="w-full py-6 sm:py-4 text-base font-medium"
+            disabled={isClaiming}
+          >
             {isClaiming ? (
               <>
                 <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Claiming...

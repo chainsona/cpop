@@ -17,6 +17,7 @@ export async function apiMiddleware(
       '/api/pops/[id]/attributes/public',
       '/api/pops/public',
       '/api/test',
+      '/api/solana-pay/claim',
     ];
 
     console.log('POST request received for POP:', url);

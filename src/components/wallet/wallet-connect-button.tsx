@@ -16,8 +16,13 @@ import { useWalletModal } from '@solana/wallet-adapter-react-ui';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { truncateWalletAddress } from '@/lib/utils';
+import { cn } from '@/lib/utils';
 
-export function WalletConnectButton() {
+interface WalletConnectButtonProps {
+  className?: string;
+}
+
+export function WalletConnectButton({ className }: WalletConnectButtonProps = {}) {
   const { 
     connecting, 
     isAuthenticated, 
@@ -90,7 +95,7 @@ export function WalletConnectButton() {
         variant="outline"
         onClick={() => setVisible(true)}
         disabled={connecting}
-        className="flex items-center gap-2"
+        className={cn("flex items-center gap-2", className)}
       >
         {connecting ? (
           <>
@@ -112,13 +117,15 @@ export function WalletConnectButton() {
       <DropdownMenuTrigger asChild>
         <Button 
           variant="outline" 
-          className={`flex items-center gap-2 ${
+          className={cn(
+            "flex items-center gap-2",
             hasWalletMismatch 
               ? "border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100" 
               : isAuthenticated 
                 ? "border-green-200 bg-green-50 text-green-700 hover:bg-green-100" 
-                : ""
-          }`}
+                : "",
+            className  
+          )}
         >
           <Wallet className="h-4 w-4" />
           {hasWalletMismatch && <AlertTriangle className="h-3 w-3" />}

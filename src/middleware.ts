@@ -6,6 +6,7 @@ const PUBLIC_ROUTES = [
   '/auth', // Auth pages need to be public
   '/api', // API routes have their own auth
   '/explorer', // Explorer page is public
+  '/api/solana-pay', // Solana Pay endpoints must be public
 ];
 
 // System paths that should never be intercepted
@@ -103,6 +104,9 @@ export const config = {
     '/profile',
     '/profile/:path*',
     '/settings',
-    '/settings/:path*'
+    '/settings/:path*',
+    
+    // EXCLUDE Solana Pay endpoints from middleware
+    '/((?!api/solana-pay|_next|static|favicon.ico|images|fonts).*)'
   ]
 }; 
