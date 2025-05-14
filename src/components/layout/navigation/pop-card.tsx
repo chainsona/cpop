@@ -4,7 +4,7 @@ import { ChevronRight } from 'lucide-react';
 import { POP } from '@/types/pop';
 
 interface POPCardProps {
-  pop: POP;
+  pop: POP & { description?: string };
   onClick: (pop: POP) => void;
   type?: 'compact' | 'full';
 }
@@ -39,11 +39,11 @@ export function POPCard({ pop, onClick, type = 'full' }: POPCardProps) {
           <div className="font-medium text-lg truncate group-hover:text-blue-600 transition-colors">
             {pop.title}
           </div>
-          <div className="flex items-center gap-2 mt-1">
-            <span className={`text-xs px-1.5 py-0.5 rounded-full ${statusColors[pop.status]}`}>
-              {pop.status}
-            </span>
-          </div>
+          {pop.description && (
+            <div className="text-xs text-neutral-600 line-clamp-2 mt-1">
+              {pop.description}
+            </div>
+          )}
         </div>
         <ChevronRight className="h-5 w-5 text-neutral-400 opacity-0 group-hover:opacity-100 transition-opacity" />
       </button>
@@ -69,11 +69,11 @@ export function POPCard({ pop, onClick, type = 'full' }: POPCardProps) {
         <div className="font-medium text-base sm:text-lg truncate group-hover:text-blue-600 transition-colors">
           {pop.title}
         </div>
-        <div className="flex items-center gap-2 mt-1 sm:mt-2">
-          <span className={`text-xs px-1.5 sm:px-2 py-0.5 rounded-full ${statusColors[pop.status]}`}>
-            {pop.status}
-          </span>
-        </div>
+        {pop.description && (
+          <div className="text-sm text-neutral-600 line-clamp-2 mt-1 sm:mt-2">
+            {pop.description}
+          </div>
+        )}
       </div>
       <ChevronRight className="h-5 w-5 text-neutral-400 opacity-0 group-hover:opacity-100 transition-opacity" />
     </button>

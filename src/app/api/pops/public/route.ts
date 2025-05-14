@@ -48,7 +48,17 @@ export async function GET(request: NextRequest) {
       prisma.pop.findMany({
         where: whereClause,
         orderBy: { createdAt: 'desc' },
-        include: {
+        select: {
+          id: true,
+          title: true,
+          description: true, // Explicitly select description
+          imageUrl: true,
+          website: true,
+          startDate: true,
+          endDate: true,
+          status: true,
+          createdAt: true,
+          updatedAt: true,
           settings: {
             select: {
               visibility: true,

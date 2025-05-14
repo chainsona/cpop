@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { POP } from '@/types/pop';
+import { useAuth } from '@/hooks/use-auth';
 
 export interface UsePopDataProps {
   isOpen?: boolean;
@@ -12,6 +13,7 @@ export interface UsePopDataProps {
 export function usePopData({ isOpen, onClose }: UsePopDataProps = {}) {
   const router = useRouter();
   const pathname = usePathname();
+  const { isAuthenticated } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [pops, setPops] = useState<POP[]>([]);
   const [recentPops, setRecentPops] = useState<POP[]>([]);
@@ -24,10 +26,12 @@ export function usePopData({ isOpen, onClose }: UsePopDataProps = {}) {
     const fetchPops = async () => {
       try {
         setIsLoading(true);
-        const response = await fetch('/api/pops');
+        // Use public endpoint when user is not authenticated
+        const endpoint = isAuthenticated ? '/api/pops' : '/api/pops/public';
+        const response = await fetch(endpoint);
 
         if (!response.ok) {
-          throw new Error('Failed to fetch POPs');
+          throw new Error(`Failed to fetch POPs: ${response.status}`);
         }
 
         const data = await response.json();
@@ -44,7 +48,7 @@ export function usePopData({ isOpen, onClose }: UsePopDataProps = {}) {
       fetchPops();
       loadRecentPopsFromStorage();
     }
-  }, [isOpen]);
+  }, [isOpen, isAuthenticated]);
 
   // Load recent POPs from localStorage
   const loadRecentPopsFromStorage = () => {
@@ -109,7 +113,12 @@ export function usePopData({ isOpen, onClose }: UsePopDataProps = {}) {
       // If not found locally but we're on a POP page, fetch the specific POP
       const fetchSinglePop = async () => {
         try {
-          const response = await fetch(`/api/pops/${popId}`);
+          // Use appropriate endpoint based on authentication status
+          const endpoint = isAuthenticated 
+            ? `/api/pops/${popId}` 
+            : `/api/pops/${popId}/public`;
+            
+          const response = await fetch(endpoint);
           if (response.ok) {
             const data = await response.json();
             if (data.pop?.title) {
@@ -123,7 +132,7 @@ export function usePopData({ isOpen, onClose }: UsePopDataProps = {}) {
 
       fetchSinglePop();
     }
-  }, [pathname, pops, recentPops, isOpen]);
+  }, [pathname, pops, recentPops, isOpen, isAuthenticated]);
 
   return {
     searchQuery,

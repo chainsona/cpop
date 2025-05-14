@@ -300,7 +300,7 @@ export async function mintTokensAfterDistributionCreated(popId: string): Promise
     const confirmedToken = await prisma.popToken.findFirst({
       where: { popId },
     });
-    
+
     if (confirmedToken) {
       console.log(`Token was created in parallel for POP ${popId}`, confirmedToken);
       return {
@@ -320,13 +320,17 @@ export async function mintTokensAfterDistributionCreated(popId: string): Promise
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     };
-    
+
     // Try to get the auth cookie from the request context if running server-side
-    if (typeof window === 'undefined' && typeof document === 'undefined' && process.env.NEXT_AUTH_SECRET) {
+    if (
+      typeof window === 'undefined' &&
+      typeof document === 'undefined' &&
+      process.env.NEXT_AUTH_SECRET
+    ) {
       const { cookies } = require('next/headers');
       const cookieStore = cookies();
       const authToken = cookieStore.get('next-auth.session-token')?.value;
-      
+
       if (authToken) {
         headers['Cookie'] = `next-auth.session-token=${authToken}`;
       }

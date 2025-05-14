@@ -2,9 +2,10 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Search, Sparkles, ChevronRight } from 'lucide-react';
+import { Search, Sparkles, ChevronRight, Globe } from 'lucide-react';
 import { POP } from '@/types/pop';
 import { POPCard } from './pop-card';
+import { useAuth } from '@/hooks/use-auth';
 
 interface POPResultsProps {
   pops: POP[];
@@ -27,6 +28,8 @@ export function POPResults({
   onPopClick,
   onClose,
 }: POPResultsProps) {
+  const { isAuthenticated } = useAuth();
+
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
@@ -72,13 +75,36 @@ export function POPResults({
         </div>
       ) : filteredPops.length === 0 ? (
         <div className="text-center py-8">
-          <p className="text-neutral-500">No POPs found</p>
+          {!isAuthenticated ? (
+            <div>
+              <p className="text-neutral-500">No public POPs found</p>
+              <p className="text-sm text-neutral-400 mt-2">
+                <Link href="/auth" className="text-blue-500 hover:underline" onClick={onClose}>
+                  Sign in
+                </Link>{' '}
+                to see your personal POPs
+              </p>
+            </div>
+          ) : (
+            <p className="text-neutral-500">No POPs found</p>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
           {filteredPops.slice(0, 6).map(pop => (
             <POPCard key={pop.id} pop={pop} onClick={onPopClick} />
           ))}
+        </div>
+      )}
+
+      {/* Public POPs explainer */}
+      {!isAuthenticated && !isLoading && !error && filteredPops.length > 0 && (
+        <div className="mt-1 text-xs text-neutral-500 bg-neutral-50 p-2 rounded">
+          Showing public POPs only.
+          <Link href="/auth" className="text-blue-500 hover:underline ml-1" onClick={onClose}>
+            Sign in
+          </Link>{' '}
+          to see all your POPs.
         </div>
       )}
 

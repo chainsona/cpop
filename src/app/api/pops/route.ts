@@ -205,7 +205,18 @@ async function getHandler(request: NextRequest) {
     const pops = await prisma.pop.findMany({
       where,
       orderBy: { createdAt: 'desc' },
-      include: {
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        imageUrl: true,
+        website: true,
+        startDate: true,
+        endDate: true,
+        status: true,
+        createdAt: true,
+        updatedAt: true,
+        creatorId: true,
         settings: true
       }
     });

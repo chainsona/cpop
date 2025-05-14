@@ -90,6 +90,7 @@ export interface ColorPalette {
 export interface POP {
   id: string;
   title: string;
+  description?: string;
   imageUrl: string;
   status: 'Draft' | 'Published' | 'Distributed' | 'Active' | 'Disabled' | 'Deleted';
 }
